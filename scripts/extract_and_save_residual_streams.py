@@ -82,7 +82,7 @@ def extract_and_save_residual_streams(
         # Replace LLaVA language model
         if replacement_lm_name_or_path is not None and replace_lm:
             model = replace_multimodal_lm(
-                llava_model=model,
+                multimodal_model=model,
                 replacement_lm_name_or_path=replacement_lm_name_or_path,
                 cache_dir=args.model_cache_dir,
             )
@@ -142,6 +142,7 @@ def main():
     parser.add_argument(
         "--question-instruction-type", type=parse_question_instruction, default=None
     )
+    parser.add_argument("--continue-final-message", action="store_true", default=False)
     parser.add_argument("--guide-text", type=str, default="")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()

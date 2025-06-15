@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=dssc
-#SBATCH --job-name=extract
+#SBATCH --job-name=experiment
 #SBATCH --partition=DGX
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=20
@@ -14,8 +14,10 @@ CONDA_ENV_NAME=emu3
 source ~/scratch/miniconda3/etc/profile.d/conda.sh
 conda activate "$CONDA_ENV_NAME"
 
-# SCRIPT="multiple_choice_benchmarks_evaluation.sh"
-SCRIPT="analyze_residual_streams.sh"
+SCRIPT="multiple_choice_benchmarks_evaluation.sh"
+
+# SCRIPT="extract_residual_streams.sh"
+# SCRIPT="analyze_residual_streams.sh"
 
 # SCRIPT="extract_heads_representations.sh"
 # SCRIPT="analyze_heads_representations.sh"

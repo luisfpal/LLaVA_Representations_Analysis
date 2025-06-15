@@ -4,6 +4,7 @@
 
 # --- Configuration Section ---
 CHAT_MODE="true"
+CONTINUE_FINAL_MESSAGE="true"
 MM_NAME="llava-hf/llava-1.5-7b-hf"
 LM_NAME="lmsys/vicuna-7b-v1.5"
 QUESTION_INSTRUCTION_TYPE="singular"
@@ -47,9 +48,15 @@ fi
 if [ "$CHAT_MODE" = "true" ]; then
     SCRIPT_ARGS+=(--chat-mode)
 fi
+if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
+    SCRIPT_ARGS+=(--continue-final-message)
+fi
 SCRIPT_ARGS+=(--mm-name-or-path "$MM_NAME")
 SCRIPT_ARGS+=(--lm-name-or-path "$LM_NAME")
 SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
+if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
+    SCRIPT_ARGS+=(--continue-final-message)
+fi
 SCRIPT_ARGS+=(--seed "$SEED")
 
 # --- Debugger ---
@@ -75,6 +82,7 @@ echo "Token index: $TOKEN_INDEX"
 echo "Mean over tokens: $MEAN_OVER_TOKENS"
 echo "Question instruction type: $QUESTION_INSTRUCTION_TYPE"
 echo "Chat mode: $CHAT_MODE"
+echo "Continue Final Message: $CONTINUE_FINAL_MESSAGE"
 echo "Guide text: $GUIDE_TEXT"
 if [ "$TEXTS_QA" = "true" ]; then
     echo "Texts QA: $TEXTS_QA"

@@ -103,7 +103,7 @@ def heads_representations_extractor(
 
     if replacement_lm_name_or_path is not None and replace_lm:
         model = replace_multimodal_lm(
-            llava_model=model,
+            multimodal_model=model,
             replacement_lm_name_or_path=replacement_lm_name_or_path,
             cache_dir=args.model_cache_dir,
         )
@@ -226,11 +226,7 @@ def main():
     parser.add_argument(
         "--question-instruction-type", type=parse_question_instruction, default=None
     )
-    parser.add_argument(
-        "--continue-final-message",
-        action="store_true",
-        default=True,
-    )
+    parser.add_argument("--continue-final-message", action="store_true", default=False)
     parser.add_argument("--guide-text", type=str, default="")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)

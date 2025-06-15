@@ -5,6 +5,8 @@ import argparse
 from transformers import (
     LlavaProcessor,
     LlavaForConditionalGeneration,
+    LlavaNextProcessor,
+    LlavaNextForConditionalGeneration,
     PaliGemmaProcessor,
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
@@ -21,9 +23,13 @@ from .constants import (
 
 # Define supported vision-language model types and their corresponding classes
 SUPPORTED_VL_MODELS = {
-    "llava": {
+    "llava-1.5": {
         "processor": LlavaProcessor,
         "model": LlavaForConditionalGeneration,
+    },
+    "llava-v1.6": {
+        "processor": LlavaNextProcessor,
+        "model": LlavaNextForConditionalGeneration,
     },
     "paligemma2": {
         "processor": PaliGemmaProcessor,
@@ -225,7 +231,7 @@ def replace_multimodal_lm(
     # Move the updated llava model back to its original device
     multimodal_model.to(multimodal_model_device)
 
-    print("Successfully replaced LLaVA language model.")
+    print("Successfully replaced multimodal language model.")
     return multimodal_model
 
 

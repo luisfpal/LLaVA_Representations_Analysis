@@ -159,10 +159,10 @@ def eval_model(args: argparse.Namespace):
         # Set the model to evaluation mode
         model.eval()
 
-        # Replace LLaVA language model
+        # Replace multimodal language model
         if args.replacement_lm_name_or_path is not None:
             model = replace_multimodal_lm(
-                llava_model=model,
+                multimodal_model=model,
                 replacement_lm_name_or_path=args.replacement_lm_name_or_path,
                 cache_dir=args.model_cache_dir,
             )
@@ -347,6 +347,7 @@ def main():
     parser.add_argument(
         "--question-instruction-type", type=parse_question_instruction, default=None
     )
+    parser.add_argument("--continue-final-message", action="store_true", default=False)
     parser.add_argument("--guide-text", type=str, default="")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--do-sample", action="store_true", default=False)

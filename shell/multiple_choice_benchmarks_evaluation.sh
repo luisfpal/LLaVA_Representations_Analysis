@@ -2,21 +2,22 @@
 
 # --- Configuration Section ---
 CHAT_MODE="true"
+CONTINUE_FINAL_MESSAGE="true"
 GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
 QUESTION_INSTRUCTION_TYPE="singular"
-TEXT_MODEL="false"
-REPLACE_LLAVA_LM="false"
 MODEL_NAME="llava-hf/llava-1.5-7b-hf"
 # MODEL_NAME="lmsys/vicuna-7b-v1.5"
 # MODEL_NAME="meta-llama/Llama-2-7b-hf"
 # MODEL_NAME="meta-llama/Llama-2-7b-chat-hf"
-DATASET_NAME="cais/mmlu"
-# DATASET_NAME="derek-thomas/ScienceQA"
+TEXT_MODEL="false"
+REPLACE_MULTIMODAL_LM="false"
+# DATASET_NAME="cais/mmlu"
+DATASET_NAME="derek-thomas/ScienceQA"
 DATASET_SPLIT="test"
 TEXTS_QA="true"
 IMAGES_QA="false"
 REPLACEMENT_LM_NAME="lmsys/vicuna-7b-v1.5"
-BATCH_SIZE=26
+BATCH_SIZE=25
 
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
 FILENAME="multiple_choice_benchmarks_evaluation.py"
@@ -47,11 +48,14 @@ fi
 if [ "$CHAT_MODE" = "true" ]; then
     SCRIPT_ARGS+=(--chat-mode)
 fi
+if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
+    SCRIPT_ARGS+=(--continue-final-message)
+fi
 SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
 SCRIPT_ARGS+=(--guide-text "$GUIDE_TEXT")
 SCRIPT_ARGS+=(--batch-size "$BATCH_SIZE")
 SCRIPT_ARGS+=(--seed "$SEED")
-if [ "$REPLACE_LLAVA_LM" = "true" ]; then
+if [ "$REPLACE_MULTIMODAL_LM" = "true" ]; then
     SCRIPT_ARGS+=(--replacement-lm-name-or-path "$REPLACEMENT_LM_NAME")
 fi
 
@@ -63,9 +67,9 @@ if [ "$1" = "--debug" ]; then
     echo "Debugger enabled - waiting for client connection on localhost:5678"
 fi
 
-# --- Ensure the MODEL_NAME AND REPLACEMENT_LM_NAME are not the same if REPLACE_LLAVA_LM is true ---
-if [ "$REPLACE_LLAVA_LM" = "true" ] && [ "$MODEL_NAME" = "$REPLACEMENT_LM_NAME" ]; then
-    echo "Error: MODEL_NAME and REPLACEMENT_LM_NAME cannot be the same when REPLACE_LLAVA_LM is true."
+# --- Ensure the MODEL_NAME AND REPLACEMENT_LM_NAME are not the same if REPLACE_MULTIMODAL_LM is true ---
+if [ "$REPLACE_MULTIMODAL_LM" = "true" ] && [ "$MODEL_NAME" = "$REPLACEMENT_LM_NAME" ]; then
+    echo "Error: MODEL_NAME and REPLACEMENT_LM_NAME cannot be the same when REPLACE_MULTIMODAL_LM is true."
     exit 1
 fi
 
@@ -78,6 +82,7 @@ echo "Dataset: $DATASET_NAME"
 echo "Dataset split: $DATASET_SPLIT"
 echo "Base dir: $BASE_DIR"
 echo "Chat mode: $CHAT_MODE"
+echo "Continue Final Message: $CONTINUE_FINAL_MESSAGE"
 echo "Question instruction type: $QUESTION_INSTRUCTION_TYPE"
 echo "Guide text: $GUIDE_TEXT"
 echo "Batch size: $BATCH_SIZE"
@@ -88,8 +93,8 @@ if [ "$IMAGES_QA" = "true" ]; then
     echo "Images QA: $IMAGES_QA"
 fi
 echo "Seed: $SEED"
-if [ "$REPLACE_LLAVA_LM" = "true" ]; then
-    echo "Replacing Llava LM with: $REPLACEMENT_LM_NAME"
+if [ "$REPLACE_MULTIMODAL_LM" = "true" ]; then
+    echo "Replacing Multimodal LM with: $REPLACEMENT_LM_NAME"
 fi
 if [ "$1" = "--debug" ]; then
     echo "Debugger: ${DEBUGGER_ARGS[*]}"
