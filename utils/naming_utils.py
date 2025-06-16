@@ -19,23 +19,30 @@ def generate_filename_suffix(args: argparse.Namespace) -> str:
         and args.replacement_lm_name_or_path
     ):
         suffix += "_lm-" + args.replacement_lm_name_or_path.replace("/", "-")
-    if args.texts_qa:
+    if hasattr(args, "texts_qa") and args.texts_qa:
         suffix += "_texts-qa"
-    if args.images_qa:
+    if hasattr(args, "images_qa") and args.images_qa:
         suffix += "_images-qa"
     if hasattr(args, "chat_mode"):
         if args.chat_mode:
             suffix += "_chat-format"
         else:
             suffix += "_ntp_format"
-    if args.question_instruction_type:
+    if hasattr(args, "question_instruction_type") and args.question_instruction_type:
         suffix += f"_qinst-type-{args.question_instruction_type}"
-    if args.guide_text:
+    if hasattr(args, "guide_text") and args.guide_text:
         suffix += "_guide-text"
     if hasattr(args, "continue_final_message"):
         if args.continue_final_message:
             suffix += "_continue-fm"
-    if args.seed:
+    if hasattr(args, "remove_images"):
+        if args.remove_images:
+            suffix += "_captions-context"
+        else:
+            suffix += "_images-context"
+    if hasattr(args, "downsample_size") and args.downsample_size:
+        suffix += f"_downsample-{args.downsample_size}"
+    if hasattr(args, "seed") and args.seed:
         suffix += f"_seed-{args.seed}"
     if hasattr(args, "batch_size") and args.batch_size:
         suffix += f"_batch-{args.batch_size}"
@@ -101,7 +108,7 @@ def setup_directories(
         str: Path to the directory where files should be saved
     """
     # Clean up model name for folder naming
-    model_folder = model_name.replace("/", "_").replace("-", "_")
+    model_folder = model_name.replace("/", "_")
 
     # Get dataset name from path
     dataset_name = dataset_name.split("/")[-1]

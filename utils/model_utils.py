@@ -169,7 +169,9 @@ def replace_multimodal_lm(
     # Original Multimodal model device
     multimodal_model_device = next(multimodal_model.parameters()).device
 
-    print(f"Loading {replacement_lm_name_or_path} model for replacement...")
+    print(
+        f"Loading {replacement_lm_name_or_path} model for language model replacement..."
+    )
     # Load the replacement language model (e.g., Vicuna)
     replacement_lm, _ = load_hf_model_and_processor_or_tokenizer(
         model_name_or_path=replacement_lm_name_or_path,
@@ -187,7 +189,7 @@ def replace_multimodal_lm(
             f"Replacement model type {type(replacement_lm.model)} is not compatible "
             f"with Multimodal model type {type(multimodal_model.language_model.model)}."
         )
-    print(f"Successfully loaded {replacement_lm_name_or_path} model for replacement.")
+    print(f"Successfully loaded {replacement_lm_name_or_path} mode")
 
     # Move Multimodal model to CPU
     multimodal_model.to("cpu")

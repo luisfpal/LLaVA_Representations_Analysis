@@ -132,6 +132,7 @@ def analyze_layers(
 
     layer_overlaps = {}
     reduced_unique_sample_indices = None
+    data_size = None
     if is_multi_layer1:
         # Multi-layer case
         # Find common layers between the two models
@@ -147,12 +148,14 @@ def analyze_layers(
             print(f"\nAnalyzing layer {layer_idx}...")
             R1 = data1[layer_idx]
             R2 = data2[layer_idx]
-            if idx == 0 and downsample_size is not None:
-                # Downsample the first layer to reduce computation
-                reduced_unique_sample_indices = sample_unique_row_indices(
-                    R1, downsample_size
-                )
-                print(f"Downsampling from {R1.shape[0]} to {downsample_size} samples")
+            if idx == 0:
+                data_size = R1.shape[0]
+                if downsample_size is not None and data_size > downsample_size:
+                    # Downsample the first layer to reduce computation
+                    reduced_unique_sample_indices = sample_unique_row_indices(
+                        R1, downsample_size
+                    )
+                    print(f"Downsampling from {data_size} to {downsample_size} samples")
             if reduced_unique_sample_indices is not None:
                 R1 = R1[reduced_unique_sample_indices]
                 R2 = R2[reduced_unique_sample_indices]
@@ -164,12 +167,13 @@ def analyze_layers(
         print("Analyzing single layer...")
         R1 = data1
         R2 = data2
-        if downsample_size is not None:
+        data_size = R1.shape[0]
+        if downsample_size is not None and data_size > downsample_size:
             # Downsample the data to reduce computation
             reduced_unique_sample_indices = sample_unique_row_indices(
                 R1, downsample_size
             )
-            print(f"Downsampling from {R1.shape[0]} to {downsample_size} samples")
+            print(f"Downsampling from {data_size} to {downsample_size} samples")
             R1 = R1[reduced_unique_sample_indices]
             R2 = R2[reduced_unique_sample_indices]
         overlap = compute_neighborhood_overlap(R1, R2, maxk=maxk)
@@ -221,11 +225,14 @@ def main():
         if len("_".join(remainder1[1::])) > len("_".join(remainder2[1::]))
         else "_".join(remainder2[1::])
     )
+    details = (
+        details.replace(model_name1, "").replace(model_name2, "").replace("lm-_", "")
+    )
     suffix_filename = f"{model_name1}_vs_{model_name2}_{details}_maxk-{args.maxk}"
-    if args.downsample_size is not None:
-        suffix_filename += f"_downsample-{args.downsample_size}"
+    if "downsample" not in suffix_filename and args.downsample_size is not None:
+        suffix_filename += f"_analysis-downsample-{args.downsample_size}"
 
-    layer_overlap_file_name = f"layer_overlap_{suffix_filename}.csv"
+    layer_overlap_file_name = f"layer-overlap_{suffix_filename}.csv"
     csv_path = os.path.join(
         results_dir,
         layer_overlap_file_name,
@@ -260,7 +267,7 @@ def main():
     if len(layer_overlaps_df) != 1:
         plot_path = os.path.join(
             plot_dir,
-            f"layer_overlap_{suffix_filename}.png",
+            f"layer-overlap_{suffix_filename}.png",
         )
         plot_layer_overlaps(layer_overlaps_df, plot_path, plot_title=args.plot_title)
 

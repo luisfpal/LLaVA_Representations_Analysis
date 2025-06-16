@@ -35,15 +35,8 @@ def extract_and_save_residual_streams(
         str: Path to the saved file
     """
     model_for_representations_extraction = (
-        model_name if not replace_lm else replacement_lm_name_or_path
+        replacement_lm_name_or_path if replace_lm else model_name
     )
-    # Create an appropriate filename
-    if (
-        not text_model
-        and model_name != model_for_representations_extraction
-        and replace_lm
-    ):
-        args.replacement_lm_name_or_path = replacement_lm_name_or_path or model_name
 
     print(f"\n=== Processing model: {model_for_representations_extraction} ===")
 
@@ -96,6 +89,9 @@ def extract_and_save_residual_streams(
             texts_qa=args.texts_qa,
             images_qa=args.images_qa,
             question_instruction_type=args.question_instruction_type,
+            remove_images=args.remove_images,
+            downsample_size=args.downsample_size,
+            seed=args.seed,
         )
 
         # Extract residual streams
@@ -144,6 +140,8 @@ def main():
     )
     parser.add_argument("--continue-final-message", action="store_true", default=False)
     parser.add_argument("--guide-text", type=str, default="")
+    parser.add_argument("--remove-images", action="store_true", default=False)
+    parser.add_argument("--downsample-size", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 

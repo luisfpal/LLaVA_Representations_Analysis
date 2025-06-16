@@ -1,25 +1,51 @@
 #!/bin/bash
-#SBATCH --account=dssc
-#SBATCH --job-name=experiment
-#SBATCH --partition=DGX
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=20
-#SBATCH --mem=40GB
-#SBATCH --time=00:30:00
+# ====================== Configuration ====================== #
+ACCOUNT="dssc"
+JOB_NAME="experiment"
+PARTITION="DGX"
+GPUS=1
+CPUS=20
+MEM="40GB"
+TIME="00:30:00"
 
-# Conda environment name
-CONDA_ENV_NAME=emu3
+PROJECT_ROOT="$HOME/multimodal_finetuned_representations"
+LOG_DIR="$PROJECT_ROOT/.experiments_logs"
+mkdir -p "$LOG_DIR"
 
-# Activate conda environment
-source ~/scratch/miniconda3/etc/profile.d/conda.sh
-conda activate "$CONDA_ENV_NAME"
-
-SCRIPT="multiple_choice_benchmarks_evaluation.sh"
-
-# SCRIPT="extract_residual_streams.sh"
+# SCRIPT="multiple_choice_benchmarks_evaluation.sh"
+SCRIPT="extract_residual_streams.sh"
 # SCRIPT="analyze_residual_streams.sh"
-
 # SCRIPT="extract_heads_representations.sh"
 # SCRIPT="analyze_heads_representations.sh"
-# Command to run
-bash "$HOME/multimodal_finetuned_representations/shell/$SCRIPT"
+
+# ====================== SBATCH Script Creation ====================== #
+SBATCH_SCRIPT=$(mktemp /tmp/sbatch_experiment.XXXXXX.sh)
+
+cat <<EOT >"$SBATCH_SCRIPT"
+#!/bin/bash
+#SBATCH --account=$ACCOUNT
+#SBATCH --job-name=$JOB_NAME
+#SBATCH --partition=$PARTITION
+#SBATCH --gres=gpu:$GPUS
+#SBATCH --cpus-per-task=$CPUS
+#SBATCH --mem=$MEM
+#SBATCH --time=$TIME
+#SBATCH --output=$LOG_DIR/slurm-%j.out
+#SBATCH --error=$LOG_DIR/slurm-%j.out
+
+# Activate environment
+source "$PROJECT_ROOT/.venv/bin/activate"
+
+# Run script
+bash "$PROJECT_ROOT/shell/$SCRIPT"
+EOT
+
+# ====================== Job Submission ====================== #
+echo "🟢 Submitting SBATCH job for experiment: $SCRIPT"
+echo "----------------------------------------------------"
+cat "$SBATCH_SCRIPT"
+echo "----------------------------------------------------"
+
+JOB_ID=$(sbatch "$SBATCH_SCRIPT" | awk '{print $4}')
+echo "✅ Job submitted with ID: $JOB_ID"
+echo "📁 Unified output: $LOG_DIR/slurm-$JOB_ID.out"
