@@ -5,16 +5,16 @@ JOB_NAME="experiment"
 PARTITION="DGX"
 GPUS=1
 CPUS=20
-MEM="40GB"
-TIME="00:30:00"
+MEM="60GB"
+TIME="00:20:00"
 
 PROJECT_ROOT="$HOME/multimodal_finetuned_representations"
 LOG_DIR="$PROJECT_ROOT/.experiments_logs"
 mkdir -p "$LOG_DIR"
 
 # SCRIPT="multiple_choice_benchmarks_evaluation.sh"
-SCRIPT="extract_residual_streams.sh"
-# SCRIPT="analyze_residual_streams.sh"
+# SCRIPT="extract_residual_streams.sh"
+SCRIPT="analyze_residual_streams.sh"
 # SCRIPT="extract_heads_representations.sh"
 # SCRIPT="analyze_heads_representations.sh"
 

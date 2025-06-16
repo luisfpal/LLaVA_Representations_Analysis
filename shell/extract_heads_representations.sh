@@ -1,19 +1,25 @@
 #!/bin/bash
 
 # --- Configuration Section ---
-CONTINUE_FINAL_MESSAGE="true"
-DATASET_NAME="cais/mmlu"
-# DATASET_NAME="derek-thomas/ScienceQA"
-DATASET_SPLIT="test"
-QUESTION_INSTRUCTION_TYPE="plural"
-GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
-TEXTS_QA="true"
-IMAGES_QA="false"
+# GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
+GUIDE_TEXT=""
+DOWNSAMPLE_SIZE="2500"
+# DATASET_NAME_OR_PATH="cais/mmlu"
+# DATASET_NAME_OR_PATH="derek-thomas/ScienceQA"
+DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
+DATASET_SPLIT="" # Empty for cocoqa_captioning_restval
+QUESTION_INSTRUCTION_TYPE=""
+TEXTS_QA="false"
+IMAGES_QA="true"
+BATCH_SIZE=20
+
 LAYER_INDEX="all"
 TOKENS_MODE="last"
-BATCH_SIZE=10
+
 MM_NAME="llava-hf/llava-1.5-7b-hf"
 LM_NAME="lmsys/vicuna-7b-v1.5"
+CHAT_MODE="true"
+CONTINUE_FINAL_MESSAGE="true"
 SEED=42
 
 REPRESENTATIONS_DIR="$HOME/scratch/representations"
@@ -28,7 +34,7 @@ DATASET_CACHE_DIR="$HOME/scratch/huggingface/datasets"
 SCRIPT_ARGS=()
 SCRIPT_ARGS+=(--representations-dir "$REPRESENTATIONS_DIR")
 SCRIPT_ARGS+=(--model-cache-dir "$MODEL_CACHE_DIR")
-SCRIPT_ARGS+=(--dataset-name "$DATASET_NAME")
+SCRIPT_ARGS+=(--dataset-name "$DATASET_NAME_OR_PATH")
 SCRIPT_ARGS+=(--dataset-cache-dir "$DATASET_CACHE_DIR")
 SCRIPT_ARGS+=(--split "$DATASET_SPLIT")
 SCRIPT_ARGS+=(--layer-index "$LAYER_INDEX")
@@ -41,11 +47,17 @@ if [ "$IMAGES_QA" = "true" ]; then
 fi
 SCRIPT_ARGS+=(--mm-name-or-path "$MM_NAME")
 SCRIPT_ARGS+=(--lm-name-or-path "$LM_NAME")
+SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
+if [ "$CHAT_MODE" = "true" ]; then
+    SCRIPT_ARGS+=(--chat-mode)
+fi
 if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
     SCRIPT_ARGS+=(--continue-final-message)
 fi
-SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
 SCRIPT_ARGS+=(--guide-text "$GUIDE_TEXT")
+if [ -n "$DOWNSAMPLE_SIZE" ]; then
+    SCRIPT_ARGS+=(--downsample-size "$DOWNSAMPLE_SIZE")
+fi
 SCRIPT_ARGS+=(--batch-size "$BATCH_SIZE")
 SCRIPT_ARGS+=(--seed "$SEED")
 
@@ -65,13 +77,21 @@ echo "====== Extraction Configuration ======"
 echo "Representations directory: $REPRESENTATIONS_DIR"
 echo "MM model: $MM_NAME"
 echo "LM model: $LM_NAME"
-echo "Dataset: $DATASET_NAME"
+echo "Dataset: $DATASET_NAME_OR_PATH"
 echo "Split: $DATASET_SPLIT"
 echo "Layer specification: $LAYER_INDEX"
 echo "Tokens mode: $TOKENS_MODE"
 echo "Question instruction type: $QUESTION_INSTRUCTION_TYPE"
-echo "Continue final message: $CONTINUE_FINAL_MESSAGE"
 echo "Guide text: $GUIDE_TEXT"
+if [ "$CHAT_MODE" = "true" ]; then
+    echo "Chat mode: $CHAT_MODE"
+fi
+if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
+    echo "Continue final message: $CONTINUE_FINAL_MESSAGE"
+fi
+if [ -n "$DOWNSAMPLE_SIZE" ]; then
+    echo "Downsample size: $DOWNSAMPLE_SIZE"
+fi
 if [ "$TEXTS_QA" = "true" ]; then
     echo "Texts QA: $TEXTS_QA"
 fi

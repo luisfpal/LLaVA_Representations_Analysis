@@ -170,7 +170,7 @@ def replace_multimodal_lm(
     multimodal_model_device = next(multimodal_model.parameters()).device
 
     print(
-        f"Loading {replacement_lm_name_or_path} model for language model replacement..."
+        f"\nLoading {replacement_lm_name_or_path} model for language model replacement..."
     )
     # Load the replacement language model (e.g., Vicuna)
     replacement_lm, _ = load_hf_model_and_processor_or_tokenizer(
@@ -186,10 +186,10 @@ def replace_multimodal_lm(
     # Check if the type of the replacement model is compatible
     if type(replacement_lm.model) is not type(multimodal_model.language_model.model):
         raise TypeError(
-            f"Replacement model type {type(replacement_lm.model)} is not compatible "
+            f"\nReplacement model type {type(replacement_lm.model)} is not compatible "
             f"with Multimodal model type {type(multimodal_model.language_model.model)}."
         )
-    print(f"Successfully loaded {replacement_lm_name_or_path} mode")
+    print(f"\nSuccessfully loaded {replacement_lm_name_or_path} mode")
 
     # Move Multimodal model to CPU
     multimodal_model.to("cpu")
@@ -337,12 +337,12 @@ def resolve_layer_indices(
             "in model.config or model.language_model.config."
         )
     if isinstance(layer_index, str) and layer_index.lower() == "all":
-        return list(range(num_layers))
+        return list(range(1, num_layers + 1))
     elif isinstance(layer_index, list):
-        if not all(0 <= idx < num_layers for idx in layer_index):
+        if not all(1 <= idx <= num_layers for idx in layer_index):
             raise ValueError(
                 f"Invalid layer indices: {layer_index}. "
-                f"Expected integers in the range 0 to {num_layers - 1}."
+                f"Expected integers in the range 1 to {num_layers}."
             )
         return layer_index
     elif isinstance(layer_index, int):

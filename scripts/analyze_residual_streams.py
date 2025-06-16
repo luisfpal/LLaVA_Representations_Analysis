@@ -5,7 +5,12 @@ import matplotlib.pyplot as plt
 from safetensors.torch import load_file
 import pandas as pd
 import numpy as np
-from utils import compute_neighborhood_overlap, seed_all, sample_unique_row_indices
+from utils import (
+    compute_neighborhood_overlap,
+    seed_all,
+    sample_unique_row_indices,
+    create_filename_suffix_from_paths,
+)
 
 
 def load_residual_stream(file_path):
@@ -214,23 +219,11 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     # Create a suffix for the results filenames based on the paths
-    split_path1 = args.residual_stream_path1.split("representations", 1)
-    split_path2 = args.residual_stream_path2.split("representations", 1)
-    remainder1 = split_path1[1].split(".safetensors")[0].split("/")[1:]
-    remainder2 = split_path2[1].split(".safetensors")[0].split("/")[1:]
-    model_name1 = remainder1[0]
-    model_name2 = remainder2[0]
-    details = (
-        "_".join(remainder1[1::])
-        if len("_".join(remainder1[1::])) > len("_".join(remainder2[1::]))
-        else "_".join(remainder2[1::])
+    suffix_filename, model_name1, model_name2 = create_filename_suffix_from_paths(
+        args.residual_stream_path1,
+        args.residual_stream_path2,
+        args,
     )
-    details = (
-        details.replace(model_name1, "").replace(model_name2, "").replace("lm-_", "")
-    )
-    suffix_filename = f"{model_name1}_vs_{model_name2}_{details}_maxk-{args.maxk}"
-    if "downsample" not in suffix_filename and args.downsample_size is not None:
-        suffix_filename += f"_analysis-downsample-{args.downsample_size}"
 
     layer_overlap_file_name = f"layer-overlap_{suffix_filename}.csv"
     csv_path = os.path.join(

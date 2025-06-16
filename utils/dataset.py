@@ -165,7 +165,8 @@ class OpenVQADataset(Dataset):
         dataset_path_or_name: Path to the dataset directory or Hugging Face dataset identifier.
         downsample_size: Maximum number of samples to use
         seed: Random seed for reproducibility
-        remove_images: Whether to remove images from the dataset
+        images_qa: Whether to remove images from the dataset
+        texts_qa: Whether to remove captions from the dataset
     """
 
     def __init__(
@@ -173,9 +174,14 @@ class OpenVQADataset(Dataset):
         dataset_path_or_name: str,
         downsample_size: Optional[int] = None,
         seed: int = 42,
-        remove_images: bool = False,
+        images_qa: bool = False,
+        texts_qa: bool = False,
     ):
-        self.remove_images = remove_images
+        if images_qa and texts_qa:
+            raise ValueError("images_qa and texts_qa cannot be both True.")
+
+        self.images_qa = images_qa
+        self.texts_qa = texts_qa
         random.seed(seed)  # Set random seed for reproducible question selection
 
         dataset_dir = os.path.expanduser(dataset_path_or_name)
@@ -190,10 +196,10 @@ class OpenVQADataset(Dataset):
             raise RuntimeError(f"Failed to load dataset from {dataset_dir}: {e}")
 
         # Filter images or captions based on keep_images flag
-        if remove_images:
-            dataset = dataset.remove_columns("image")
-        else:
+        if images_qa:
             dataset = dataset.remove_columns("captions")
+        elif texts_qa:
+            dataset = dataset.remove_columns("image")
 
         # Apply downsampling if requested and if dataset is larger than requested size
         if downsample_size and downsample_size < len(dataset):
@@ -213,8 +219,7 @@ class OpenVQADataset(Dataset):
         question_data = self.dataset[idx]
         questions_and_answers = question_data["questions_answers"]
 
-        # Add context if not using images
-        if self.remove_images:
+        if self.texts_qa:
             captions = question_data.get("captions")
             if captions:
                 # Choose the longest caption as context
@@ -232,7 +237,7 @@ class OpenVQADataset(Dataset):
             "answer_letter": question_answer["answer"],
         }
 
-        if not self.remove_images:
+        if self.images_qa:
             sample["image"] = question_data.get("image", None)
 
         return sample
@@ -248,7 +253,6 @@ def get_dataloader(
     batch_size: int = 1,
     num_workers: int = 4,
     shuffle: bool = False,
-    remove_images: Optional[bool] = None,
     downsample_size: Optional[int] = None,
     seed: Optional[int] = None,
 ):
@@ -265,7 +269,6 @@ def get_dataloader(
         batch_size: Batch size for DataLoader
         num_workers: Number of workers for DataLoader
         shuffle: Whether to shuffle the data
-        remove_images: Whether to remove images in samples (for OpenVQA datasets)
         downsample_size: Maximum number of samples to use
         seed: Random seed for reproducibility
     """
@@ -295,7 +298,8 @@ def get_dataloader(
             dataset_path_or_name=dataset_path_or_name,
             downsample_size=downsample_size,
             seed=seed,
-            remove_images=remove_images,
+            images_qa=images_qa,
+            texts_qa=texts_qa,
         )
 
     def collate_fn(batch):

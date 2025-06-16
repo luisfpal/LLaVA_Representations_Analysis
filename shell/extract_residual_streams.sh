@@ -4,26 +4,26 @@
 # !Some arguments make sense only for certain datasets.
 
 # --- Configuration Section ---
-GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
-# GUIDE_TEXT=""
-REMOVE_IMAGES="false" # Only for cocoqa_captioning_restval
+# GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
+GUIDE_TEXT=""
 DOWNSAMPLE_SIZE="2500"
-DATASET_NAME_OR_PATH="cais/mmlu"
+# DATASET_NAME_OR_PATH="cais/mmlu"
 # DATASET_NAME_OR_PATH="derek-thomas/ScienceQA"
-# DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
-DATASET_SPLIT="test"
+DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
+DATASET_SPLIT="" # Empty for cocoqa_captioning_restval
+QUESTION_INSTRUCTION_TYPE=""
 TEXTS_QA="true"
 IMAGES_QA="false"
+
 LAYER_INDEX="all" # Can be a number, a comma-separated list, or "all"
 TOKEN_INDEX="-1"
 MEAN_OVER_TOKENS="false"
 
 MM_NAME="llava-hf/llava-1.5-7b-hf"
 LM_NAME="lmsys/vicuna-7b-v1.5"
-SEED=42
-QUESTION_INSTRUCTION_TYPE="singular"
 CHAT_MODE="true"
 CONTINUE_FINAL_MESSAGE="true"
+SEED=42
 
 REPRESENTATIONS_DIR="$HOME/scratch/representations"
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
@@ -60,10 +60,6 @@ fi
 SCRIPT_ARGS+=(--mm-name-or-path "$MM_NAME")
 SCRIPT_ARGS+=(--lm-name-or-path "$LM_NAME")
 SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
-
-if [ "$REMOVE_IMAGES" = "true" ] && [[ "$DATASET_NAME_OR_PATH" == *"cocoqa"* ]]; then
-    SCRIPT_ARGS+=(--remove-images)
-fi
 if [ -n "$DOWNSAMPLE_SIZE" ]; then
     SCRIPT_ARGS+=(--downsample-size "$DOWNSAMPLE_SIZE")
 fi
@@ -86,6 +82,7 @@ mkdir -p "$REPRESENTATIONS_DIR"
 # Print extraction configuration
 echo "====== Extraction Configuration ======"
 echo "Representations directory: $REPRESENTATIONS_DIR"
+echo "Filepath: $FILEPATH"
 echo "MM model: $MM_NAME"
 echo "LM model: $LM_NAME"
 echo "Dataset: $DATASET_NAME_OR_PATH"
@@ -94,14 +91,15 @@ echo "Layer specification: $LAYER_INDEX"
 echo "Token index: $TOKEN_INDEX"
 echo "Mean over tokens: $MEAN_OVER_TOKENS"
 echo "Question instruction type: $QUESTION_INSTRUCTION_TYPE"
-echo "Chat mode: $CHAT_MODE"
-echo "Continue Final Message: $CONTINUE_FINAL_MESSAGE"
 echo "Guide text: $GUIDE_TEXT"
+if [ "$CHAT_MODE" = "true" ]; then
+    echo "Chat mode: $CHAT_MODE"
+fi
+if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
+    echo "Continue final message: $CONTINUE_FINAL_MESSAGE"
+fi
 if [ -n "$DOWNSAMPLE_SIZE" ]; then
     echo "Downsample size: $DOWNSAMPLE_SIZE"
-fi
-if [ "$REMOVE_IMAGES" = "true" ]; then
-    echo "Remove images: $REMOVE_IMAGES"
 fi
 if [ "$TEXTS_QA" = "true" ]; then
     echo "Texts QA: $TEXTS_QA"

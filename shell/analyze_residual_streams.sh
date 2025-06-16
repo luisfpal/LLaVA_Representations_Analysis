@@ -2,22 +2,41 @@
 # This script analyzes residual streams and computes neighborhood overlap
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
 
-# RESIDUAL_STREAM_ABS_PATH1="/u/dssc/lpalaciosflores/scratch/representations/llava_hf_llava_1.5_7b_hf/ScienceQA/test/layer-all_token-last_images-qa_chat-format_qinst-type-singular_seed-42.safetensors"
-# RESIDUAL_STREAM_ABS_PATH1="/u/dssc/lpalaciosflores/scratch/representations/llava_hf_llava_1.5_7b_hf/ScienceQA/test/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_seed-42.safetensors"
-RESIDUAL_STREAM_ABS_PATH1="/u/dssc/lpalaciosflores/scratch/representations/llava_hf_llava_1.5_7b_hf/mmlu/test/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_seed-42.safetensors"
+# LLaVA 1.5 7B
+# MMLU
+# RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/mmlu/test/layers_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_continue-fm_downsample-2500_seed-42.safetensors"
+# ScienceQA Text
+RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/ScienceQA/test/layers_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_continue-fm_seed-42.safetensors"
+# ScienceQA Image
+# RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/ScienceQA/test/layers_representations/layer-all_token-last_images-qa_chat-format_qinst-type-singular_continue-fm_seed-42.safetensors"
+# COCOQA Captioning Restval Text
+# RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/cocoqa_captioning_restval/layers_representations/layer-all_token-last_texts-qa_chat-format_continue-fm_downsample-2500_seed-42.safetensors"
+# COCOQA Captioning Restval Image
+# RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/cocoqa_captioning_restval/layers_representations/layer-all_token-last_images-qa_chat-format_continue-fm_downsample-2500_seed-42.safetensors"
 
-# RESIDUAL_STREAM_ABS_PATH2="/u/dssc/lpalaciosflores/scratch/representations/lmsys_vicuna_7b_v1.5/ScienceQA/test/layer-all_token-last_lm-lmsys-vicuna-7b-v1.5_images-qa_chat-format_qinst-type-singular_seed-42.safetensors"
-# RESIDUAL_STREAM_ABS_PATH2="/u/dssc/lpalaciosflores/scratch/representations/lmsys_vicuna_7b_v1.5/ScienceQA/test/layer-all_token-last_lm-lmsys-vicuna-7b-v1.5_texts-qa_chat-format_qinst-type-singular_seed-42.safetensors"
-RESIDUAL_STREAM_ABS_PATH2="/u/dssc/lpalaciosflores/scratch/representations/lmsys_vicuna_7b_v1.5/mmlu/test/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_seed-42.safetensors"
+# Vicuna 1.5 7B
+# MMLU
+# RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/mmlu/test/layers_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_continue-fm_downsample-2500_seed-42.safetensors"
+# ScienceQA Text
+RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/ScienceQA/test/layers_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_continue-fm_seed-42.safetensors"
+# ScienceQA Image
+# RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/ScienceQA/test/layers_representations/layer-all_token-last_images-qa_chat-format_qinst-type-singular_continue-fm_seed-42.safetensors"
+# COCOQA Captioning Restval Text
+# RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/cocoqa_captioning_restval/layers_representations/layer-all_token-last_texts-qa_chat-format_continue-fm_downsample-2500_seed-42.safetensors"
+# COCOQA Captioning Restval Image
+# RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/cocoqa_captioning_restval/layers_representations/layer-all_token-last_images-qa_chat-format_continue-fm_downsample-2500_seed-42.safetensors"
 
 MAXK="30"
 FILENAME="analyze_residual_streams.py"
 FILEPATH="$PROJECT_DIR/scripts/$FILENAME"
 
-# DATASET="ScienceQA Text Test Set"
+# DATASET="MMLU Test SubSet"
+DATASET="ScienceQA Text Test Set"
 # DATASET="ScienceQA IMG Test Set"
-DATASET="MMLU Test SubSet"
-DOWNSAMPLE_SIZE="2500"
+# DATASET="COCOQA Text SubSet"
+# DATASET="COCOQA Image SubSet"
+
+DOWNSAMPLE_SIZE=""
 if [ -n "$DOWNSAMPLE_SIZE" ]; then
     DATASET="$DATASET [$DOWNSAMPLE_SIZE]"
 fi

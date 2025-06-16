@@ -42,10 +42,10 @@ def extract_and_save_residual_streams(
 
     # Setup save directory with split subfolder
     save_dir = setup_directories(
-        args.representations_dir,
-        model_for_representations_extraction,
-        args.dataset_name,
-        args.split,
+        representations_dir=args.representations_dir,
+        model_name=model_for_representations_extraction,
+        dataset_name=args.dataset_name,
+        split=args.split,
     )
 
     save_dir = os.path.join(save_dir, "layers_representations")
@@ -89,7 +89,6 @@ def extract_and_save_residual_streams(
             texts_qa=args.texts_qa,
             images_qa=args.images_qa,
             question_instruction_type=args.question_instruction_type,
-            remove_images=args.remove_images,
             downsample_size=args.downsample_size,
             seed=args.seed,
         )
@@ -126,7 +125,7 @@ def main():
     parser.add_argument("--model-cache-dir", type=str, required=True)
     parser.add_argument("--dataset-name", type=str, required=True)
     parser.add_argument("--dataset-cache-dir", type=str, required=True)
-    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--split", type=str, default="")
     parser.add_argument("--layer-index", type=parse_layer_index, default=-1)
     parser.add_argument("--token-index", type=int, default=-1)
     parser.add_argument("--mean-over-tokens", action="store_true", default=False)
@@ -140,7 +139,6 @@ def main():
     )
     parser.add_argument("--continue-final-message", action="store_true", default=False)
     parser.add_argument("--guide-text", type=str, default="")
-    parser.add_argument("--remove-images", action="store_true", default=False)
     parser.add_argument("--downsample-size", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()

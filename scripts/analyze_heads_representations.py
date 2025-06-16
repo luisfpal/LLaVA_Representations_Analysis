@@ -9,7 +9,12 @@ import argparse
 from safetensors.torch import load_file
 import time
 from tqdm import tqdm
-from utils import compute_neighborhood_overlap, seed_all, sample_unique_row_indices
+from utils import (
+    compute_neighborhood_overlap,
+    seed_all,
+    sample_unique_row_indices,
+    create_filename_suffix_from_paths,
+)
 
 
 def count_layers_and_heads(tensor_dict: Dict[str, torch.Tensor]) -> Tuple[List, List]:
@@ -69,6 +74,7 @@ def compute_neighborhood_overlap_matrix(
 
     total = num_layers1 * num_heads1
     reduced_unique_sample_indices = None
+    data_size = None
     with tqdm(total=total, desc="Computing Overlap Matrix") as pbar:
         for layer_idx, layer_key in enumerate(layers1):
             for head_idx, head_key in enumerate(heads1):
@@ -80,14 +86,15 @@ def compute_neighborhood_overlap_matrix(
                     R1 = network1_layers_heads_representations[key]
                     R2 = network2_layers_heads_representations[key]
                     if layer_idx == 0 and head_idx == 0:
-                        # Sample unique row indices only once for the first layer-head pair
-                        if downsample_size is not None and R1.size(0) > downsample_size:
+                        data_size = R1.size(0)
+                        if downsample_size is not None and data_size > downsample_size:
+                            # Sample unique row indices only once for the first layer-head pair
                             reduced_unique_sample_indices = sample_unique_row_indices(
                                 R1, downsample_size
                             )
-                        print(
-                            f"Downsampling from {R1.size(0)} to {downsample_size} unique instances."
-                        )
+                            print(
+                                f"Downsampling from {data_size} to {downsample_size} unique instances."
+                            )
 
                     if reduced_unique_sample_indices is not None:
                         R1 = R1[reduced_unique_sample_indices]
@@ -118,9 +125,9 @@ def plot_overlap_heatmap(
     save_path: Optional[str] = None,
     figsize: Tuple[int, int] = (16, 11),
     dpi: int = 200,
-    min_thresh: float = None,  # Annotate values <= this
-    max_thresh: float = None,  # Annotate values >= this
-    percentage_thresh: float = None,
+    min_thresh: Optional[float] = None,  # Annotate values <= this
+    max_thresh: Optional[float] = None,  # Annotate values >= this
+    percentage_thresh: Optional[float] = None,
 ):
     """
     Plots a heatmap of the neighborhood overlap matrix using a DataFrame.
@@ -150,6 +157,11 @@ def plot_overlap_heatmap(
 
     final_mask = overlap_df < 0.0  # Initialize mask for negative values
 
+    max_value_global = overlap_df.max().max()
+    print(f"Max overall overlap value: {max_value_global:.2f}")
+    min_value_global = overlap_df.min().min()
+    print(f"Min overall overlap value: {min_value_global:.2f}")
+
     # Update the mask if thresholds are provided
     if max_thresh is not None:
         final_mask = final_mask | (overlap_df >= max_thresh)
@@ -158,11 +170,6 @@ def plot_overlap_heatmap(
     if percentage_thresh is not None:
         max_value_per_layer = overlap_df.max(axis=1)
         min_value_per_layer = overlap_df.min(axis=1)
-
-        max_value_global = overlap_df.max().max()
-        print(f"Max overall overlap value: {max_value_global:.2f}")
-        min_value_global = overlap_df.min().min()
-        print(f"Min overall overlap value: {min_value_global:.2f}")
 
         range_per_layer = max_value_per_layer - min_value_per_layer
         threshold_amount_per_layer = range_per_layer * percentage_thresh
@@ -199,7 +206,7 @@ def plot_overlap_heatmap(
         "annot": annot_labels,
     }
 
-    if all(final_mask.values.flatten()):
+    if min_value_global > 0.0:
         heatmap_kwargs["vmax"] = 1
 
     ax = sns.heatmap(
@@ -251,36 +258,6 @@ def load_heads_representations(
     return tensors_dict
 
 
-def print_basic_overlap_stats(
-    overlap_df: pd.DataFrame,
-):
-    """
-    Print basic statistics about the overlap matrix.
-    Args:
-        overlap_df (pd.DataFrame): DataFrame with overlap values,
-                                   indexed by layers and with columns representing heads.
-    """
-    overlap_matrix = overlap_df.values
-    # Find min and max values
-    min_value = overlap_matrix.min()
-    max_value = overlap_matrix.max()
-
-    # Find the indices of the min and max values
-    min_pos = np.unravel_index(np.argmin(overlap_matrix), overlap_matrix.shape)
-    max_pos = np.unravel_index(np.argmax(overlap_matrix), overlap_matrix.shape)
-
-    # Get corresponding layer and head from DataFrame index and columns
-    min_layer = overlap_df.index[min_pos[0]]
-    min_head = overlap_df.columns[min_pos[1]]
-
-    max_layer = overlap_df.index[max_pos[0]]
-    max_head = overlap_df.columns[max_pos[1]]
-
-    # Print results
-    print(f"🔻 Minimum Overlap: {min_value:.4f} at Layer {min_layer}, Head {min_head}")
-    print(f"🔺 Maximum Overlap: {max_value:.4f} at Layer {max_layer}, Head {max_head}")
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Analyze neighborhood overlap between LLMs heads representations extraction in residual stream from two models"
@@ -312,21 +289,12 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     # Create a suffix for the results filenames based on the paths
-    split_path1 = args.heads_residual_stream_path1.split("representations", 1)
-    split_path2 = args.heads_residual_stream_path2.split("representations", 1)
-    remainder1 = split_path1[1].split(".safetensors")[0].split("/")[1:]
-    remainder2 = split_path2[1].split(".safetensors")[0].split("/")[1:]
-    model_name1 = remainder1[0]
-    model_name2 = remainder2[0]
-    details = (
-        "_".join(remainder1[1::])
-        if len("_".join(remainder1[1::])) > len("_".join(remainder2[1::]))
-        else "_".join(remainder2[1::])
+    suffix_filename, model_name1, model_name2 = create_filename_suffix_from_paths(
+        args.heads_residual_stream_path1,
+        args.heads_residual_stream_path2,
+        args,
     )
-    suffix_filename = f"{model_name1}_vs_{model_name2}_{details}_maxk-{args.maxk}"
-    if args.downsample_size is not None:
-        suffix_filename += f"_downsample-{args.downsample_size}"
-    filename = f"layer_overlap_{suffix_filename}"
+    filename = f"layer-head-overlap_{suffix_filename}"
     data_path_parquet = os.path.join(results_dir, f"{filename}.parquet")
     data_path_csv = os.path.join(results_dir, f"{filename}.csv")
 
@@ -359,8 +327,6 @@ def main():
             f"✅ Neighborhood overlap matrix between {model_name1} and {model_name2} computed successfully."
         )
         print(f"⏱️ Time taken: {elapsed_time / 60:.2f} minutes")
-
-        print_basic_overlap_stats(overlap_matrix_df)
 
         overlap_matrix_df.to_parquet(data_path_parquet)
         overlap_matrix_df.to_csv(data_path_csv)

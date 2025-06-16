@@ -13,7 +13,7 @@ def test_open_answer_vqa_dataset():
         print("\n1. Testing with images...")
         dataset_images = OpenVQADataset(
             dataset_path_or_name="~/scratch/datasets/cocoqa_captioning_restval",
-            remove_images=False,
+            images_qa=True,
             downsample_size=3,
             seed=42,
         )
@@ -31,7 +31,7 @@ def test_open_answer_vqa_dataset():
         print("\n2. Testing without images (text-only)...")
         dataset_text = OpenVQADataset(
             dataset_path_or_name="~/scratch/datasets/cocoqa_captioning_restval",
-            remove_images=True,
+            texts_qa=True,
             downsample_size=3,
             seed=42,
         )
@@ -56,7 +56,7 @@ def test_open_answer_vqa_dataset():
             print("\n3. Testing integrated dataloader with images...")
             dataloader_images = get_dataloader(
                 dataset_path_or_name="~/scratch/datasets/cocoqa_captioning_restval",
-                remove_images=False,
+                images_qa=True,
                 downsample_size=3,
                 batch_size=2,
                 seed=42,
@@ -81,7 +81,7 @@ def test_open_answer_vqa_dataset():
             print("\n4. Testing integrated dataloader without images...")
             dataloader_text = get_dataloader(
                 dataset_path_or_name="~/scratch/datasets/cocoqa_captioning_restval",
-                remove_images=True,
+                texts_qa=True,
                 downsample_size=3,
                 batch_size=2,
                 seed=42,

@@ -41,13 +41,6 @@ def extract_residual_stream(
 
     # Resolve which layers to extract from
     layer_indices = resolve_layer_indices(model, args.layer_index)
-    if isinstance(layer_indices, list):
-        layer_indices = [
-            layer_index + 1 for layer_index in layer_indices
-        ]  # Convert to 1-based indexing
-        # The transformers library returns the embedding layer as index 0,
-        # so we need to adjust the indices accordingly because the resolve_layer_indices
-        # function returns 0-based indices.
 
     # Initialize storage for results
     multi_layer_data = {

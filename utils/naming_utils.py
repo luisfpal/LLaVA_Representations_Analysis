@@ -1,5 +1,6 @@
 import os
 import argparse
+from typing import List
 
 
 def generate_filename_suffix(args: argparse.Namespace) -> str:
@@ -35,11 +36,6 @@ def generate_filename_suffix(args: argparse.Namespace) -> str:
     if hasattr(args, "continue_final_message"):
         if args.continue_final_message:
             suffix += "_continue-fm"
-    if hasattr(args, "remove_images"):
-        if args.remove_images:
-            suffix += "_captions-context"
-        else:
-            suffix += "_images-context"
     if hasattr(args, "downsample_size") and args.downsample_size:
         suffix += f"_downsample-{args.downsample_size}"
     if hasattr(args, "seed") and args.seed:
@@ -93,7 +89,10 @@ def create_filename(args: argparse.Namespace) -> str:
 
 
 def setup_directories(
-    representations_dir: str, model_name: str, dataset_name: str, split: str
+    representations_dir: str,
+    model_name: str,
+    dataset_name: str,
+    split: str = "",
 ) -> str:
     """
     Create necessary directories for saving representations.
@@ -118,3 +117,29 @@ def setup_directories(
     os.makedirs(save_dir, exist_ok=True)
 
     return save_dir
+
+
+def create_filename_suffix_from_paths(
+    path1: str, path2: str, args: argparse.Namespace
+) -> List[str]:
+    """
+    Create a suffix for filenames based on the provided paths.
+    """
+    split_path1 = path1.split("representations", 1)
+    split_path2 = path2.split("representations", 1)
+    remainder1 = split_path1[1].split(".safetensors")[0].split("/")[1:]
+    remainder2 = split_path2[1].split(".safetensors")[0].split("/")[1:]
+    model_name1 = remainder1[0]
+    model_name2 = remainder2[0]
+    details = (
+        "_".join(remainder1[1::])
+        if len("_".join(remainder1[1::])) > len("_".join(remainder2[1::]))
+        else "_".join(remainder2[1::])
+    )
+    details = (
+        details.replace(model_name1, "").replace(model_name2, "").replace("lm-_", "")
+    )
+    suffix = f"{model_name1}_vs_{model_name2}_{details}_maxk-{args.maxk}"
+    if "downsample" not in suffix and args.downsample_size is not None:
+        suffix += f"_analysis-downsample-{args.downsample_size}"
+    return suffix, model_name1, model_name2

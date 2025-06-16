@@ -1,22 +1,40 @@
 #!/bin/bash
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
 
-HEADS_RESIDUAL_STREAM_ABS_PATH1="/u/dssc/lpalaciosflores/scratch/representations/llava_hf_llava_1.5_7b_hf/mmlu/test/heads_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-plural_guide-text_continue-fm_seed-42_batch-10.safetensors"
-# HEADS_RESIDUAL_STREAM_ABS_PATH1="/u/dssc/lpalaciosflores/scratch/representations/llava_hf_llava_1.5_7b_hf/ScienceQA/test/heads_representations/layer-all_token-last_images-qa_chat-format_qinst-type-plural_guide-text_continue-fm_seed-42_batch-20.safetensors"
-# HEADS_RESIDUAL_STREAM_ABS_PATH1="/u/dssc/lpalaciosflores/scratch/representations/llava_hf_llava_1.5_7b_hf/ScienceQA/test/heads_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-plural_guide-text_continue-fm_seed-42_batch-20.safetensors"
+# LLaVA 1.5 7B
+# MMLU
+# HEADS_RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/mmlu/test/heads_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_guide-text_continue-fm_downsample-2500_seed-42_batch-20.safetensors"
+# ScienceQA Text
+# HEADS_RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/ScienceQA/test/heads_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_guide-text_continue-fm_seed-42_batch-20.safetensors"
+# ScienceQA Image
+# HEADS_RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/ScienceQA/test/heads_representations/layer-all_token-last_images-qa_chat-format_qinst-type-singular_guide-text_continue-fm_seed-42_batch-20.safetensors"
+# COCOQA Captioning Restval Text
+# HEADS_RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/cocoqa_captioning_restval/heads_representations/layer-all_token-last_texts-qa_chat-format_continue-fm_downsample-2500_seed-42_batch-20.safetensors"
+# COCOQA Captioning Restval Image
+HEADS_RESIDUAL_STREAM_ABS_PATH1="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/llava-hf_llava-1.5-7b-hf/cocoqa_captioning_restval/heads_representations/layer-all_token-last_images-qa_chat-format_continue-fm_downsample-2500_seed-42_batch-20.safetensors"
 
-HEADS_RESIDUAL_STREAM_ABS_PATH2="/u/dssc/lpalaciosflores/scratch/representations/lmsys_vicuna_7b_v1.5/mmlu/test/heads_representations/layer-all_token-last_lm-lmsys-vicuna-7b-v1.5_texts-qa_chat-format_qinst-type-plural_guide-text_continue-fm_seed-42_batch-10.safetensors"
-# HEADS_RESIDUAL_STREAM_ABS_PATH2="/u/dssc/lpalaciosflores/scratch/representations/lmsys_vicuna_7b_v1.5/ScienceQA/test/heads_representations/layer-all_token-last_lm-lmsys-vicuna-7b-v1.5_images-qa_chat-format_qinst-type-plural_guide-text_continue-fm_seed-42_batch-20.safetensors"
-# HEADS_RESIDUAL_STREAM_ABS_PATH2="/u/dssc/lpalaciosflores/scratch/representations/lmsys_vicuna_7b_v1.5/ScienceQA/test/heads_representations/layer-all_token-last_lm-lmsys-vicuna-7b-v1.5_texts-qa_chat-format_qinst-type-plural_guide-text_continue-fm_seed-42_batch-20.safetensors"
+# Vicuna 1.5 7B
+# MMLU
+# HEADS_RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/mmlu/test/heads_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_guide-text_continue-fm_downsample-2500_seed-42_batch-20.safetensors"
+# ScienceQA Text
+# HEADS_RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/ScienceQA/test/heads_representations/layer-all_token-last_texts-qa_chat-format_qinst-type-singular_guide-text_continue-fm_seed-42_batch-20.safetensors"
+# ScienceQA Image
+# HEADS_RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/ScienceQA/test/heads_representations/layer-all_token-last_images-qa_chat-format_qinst-type-singular_guide-text_continue-fm_seed-42_batch-20.safetensors"
+# COCOQA Captioning Restval Text
+# HEADS_RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/cocoqa_captioning_restval/heads_representations/layer-all_token-last_texts-qa_chat-format_continue-fm_downsample-2500_seed-42_batch-20.safetensors"
+# COCOQA Captioning Restval Image
+HEADS_RESIDUAL_STREAM_ABS_PATH2="/orfeo/cephfs/scratch/dssc/lpalaciosflores/representations/lmsys_vicuna-7b-v1.5/cocoqa_captioning_restval/heads_representations/layer-all_token-last_images-qa_chat-format_continue-fm_downsample-2500_seed-42_batch-20.safetensors"
 
 MAXK="30"
 FILENAME="analyze_heads_representations.py"
 FILEPATH="$PROJECT_DIR/scripts/$FILENAME"
 
+# DATASET="MMLU Test SubSet"
 # DATASET="ScienceQA Text Test Set"
 # DATASET="ScienceQA IMG Test Set"
-DATASET="MMLU Test SubSet"
-DOWNSAMPLE_SIZE="5000"
+# DATASET="COCOQA Text SubSet"
+# DATASET="COCOQA Image SubSet"
+DOWNSAMPLE_SIZE="2500"
 if [ -n "$DOWNSAMPLE_SIZE" ]; then
     DATASET="$DATASET [$DOWNSAMPLE_SIZE]"
 fi

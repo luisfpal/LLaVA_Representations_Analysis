@@ -52,13 +52,6 @@ def heads_representations_extractor(
         model_name if not replace_lm else replacement_lm_name_or_path
     )
 
-    if (
-        not text_model
-        and model_name != model_for_representations_extraction
-        and replace_lm
-    ):
-        args.replacement_lm_name_or_path = replacement_lm_name_or_path or model_name
-
     print(f"\n=== Processing model: {model_for_representations_extraction} ===")
 
     save_dir = setup_directories(
@@ -68,12 +61,10 @@ def heads_representations_extractor(
         split=args.split,
     )
     # Add chat_mode for create_filename (optional) and the format_prompts functions ("necessary")
-    args.chat_mode = True
     save_dir = os.path.join(save_dir, "heads_representations")
     os.makedirs(save_dir, exist_ok=True)
     save_filename = create_filename(args)
     save_path = os.path.join(save_dir, save_filename)
-    print(f"Saving representations to: {save_path}")
 
     # Check if file already exists to avoid duplicate work
     if os.path.exists(save_path):
@@ -216,7 +207,7 @@ def main():
     parser.add_argument("--model-cache-dir", type=str, required=True)
     parser.add_argument("--dataset-name", type=str, required=True)
     parser.add_argument("--dataset-cache-dir", type=str, required=True)
-    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--split", type=str, default="")
     parser.add_argument("--layer-index", type=parse_layer_index, default=-1)
     parser.add_argument("--tokens-mode", type=parse_tokens_mode, default="last")
     parser.add_argument("--texts_qa", action="store_true", default=False)
@@ -226,8 +217,10 @@ def main():
     parser.add_argument(
         "--question-instruction-type", type=parse_question_instruction, default=None
     )
+    parser.add_argument("--chat-mode", action="store_true", default=False)
     parser.add_argument("--continue-final-message", action="store_true", default=False)
     parser.add_argument("--guide-text", type=str, default="")
+    parser.add_argument("--downsample-size", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -243,7 +236,7 @@ def main():
 
     # Setup
     parameters = [
-        # {"model_name": args.mm_name_or_path, "replace_lm": False},
+        {"model_name": args.mm_name_or_path, "replace_lm": False},
         {"model_name": args.lm_name_or_path, "replace_lm": True},
     ]
 
@@ -255,8 +248,10 @@ def main():
         split=args.split,
         texts_qa=args.texts_qa,
         images_qa=args.images_qa,
-        batch_size=args.batch_size,
         question_instruction_type=args.question_instruction_type,
+        batch_size=args.batch_size,
+        downsample_size=args.downsample_size,
+        seed=args.seed,
     )
 
     # Extract and save for each model
@@ -277,6 +272,8 @@ def main():
             elapsed_time = time.time() - start_time
             print(f"✅ Completed extraction for {model_for_representations_extraction}")
             print(f"⏱️ Time taken: {elapsed_time / 60:.2f} minutes")
+
+            gc.collect()
 
         except Exception as e:
             print(

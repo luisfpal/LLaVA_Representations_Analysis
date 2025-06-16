@@ -22,7 +22,12 @@ from .model_utils import (
     ProcessorType,
     ModelType,
 )
-from .naming_utils import create_filename, generate_filename_suffix, setup_directories
+from .naming_utils import (
+    create_filename,
+    generate_filename_suffix,
+    setup_directories,
+    create_filename_suffix_from_paths,
+)
 from .operations_utils import seed_all, sample_unique_row_indices
 
 __all__ = [
@@ -47,6 +52,7 @@ __all__ = [
     "create_filename",
     "generate_filename_suffix",
     "setup_directories",
+    "create_filename_suffix_from_paths",
     "seed_all",
     "sample_unique_row_indices",
 ]
