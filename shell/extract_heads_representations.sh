@@ -2,16 +2,16 @@
 
 # --- Configuration Section ---
 # GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
-GUIDE_TEXT=""
+GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
 DOWNSAMPLE_SIZE="2500"
 # DATASET_NAME_OR_PATH="cais/mmlu"
 # DATASET_NAME_OR_PATH="derek-thomas/ScienceQA"
 DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
 DATASET_SPLIT="" # Empty for cocoqa_captioning_restval
 QUESTION_INSTRUCTION_TYPE=""
-TEXTS_QA="false"
-IMAGES_QA="true"
-BATCH_SIZE=20
+TEXTS_QA="true"
+IMAGES_QA="false"
+BATCH_SIZE=1
 
 LAYER_INDEX="all"
 TOKENS_MODE="last"

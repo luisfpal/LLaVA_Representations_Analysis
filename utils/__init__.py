@@ -10,6 +10,7 @@ from .constants import (
     ASSISTANT_ROLE,
     SQA_ANSWER_CHOICES,
     MMLU_ANSWER_CHOICES,
+    COCOQA_VI_DIGITS_MAP,
 )
 from .dataset import get_dataloader
 from .io_utils import save_extracted_residual_stream_data
@@ -40,6 +41,7 @@ __all__ = [
     "ASSISTANT_ROLE",
     "SQA_ANSWER_CHOICES",
     "MMLU_ANSWER_CHOICES",
+    "COCOQA_VI_DIGITS_MAP",
     "get_dataloader",
     "save_extracted_residual_stream_data",
     "compute_neighborhood_overlap",

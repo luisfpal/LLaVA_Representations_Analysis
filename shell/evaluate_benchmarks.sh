@@ -1,31 +1,35 @@
 #!/bin/bash
 
 # --- Configuration Section ---
-CHAT_MODE="true"
-CONTINUE_FINAL_MESSAGE="true"
-GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
-QUESTION_INSTRUCTION_TYPE="singular"
+# GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
+GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
+DOWNSAMPLE_SIZE="2500"
 MODEL_NAME="llava-hf/llava-1.5-7b-hf"
 # MODEL_NAME="lmsys/vicuna-7b-v1.5"
 # MODEL_NAME="meta-llama/Llama-2-7b-hf"
 # MODEL_NAME="meta-llama/Llama-2-7b-chat-hf"
 TEXT_MODEL="false"
-REPLACE_MULTIMODAL_LM="false"
+REPLACE_MULTIMODAL_LM="true"
+REPLACEMENT_LM_NAME="lmsys/vicuna-7b-v1.5"
 # DATASET_NAME="cais/mmlu"
-DATASET_NAME="derek-thomas/ScienceQA"
-DATASET_SPLIT="test"
+# DATASET_NAME="derek-thomas/ScienceQA"
+DATASET_NAME="~/scratch/datasets/cocoqa_captioning_restval"
+DATASET_SPLIT=""
+QUESTION_INSTRUCTION_TYPE=""
+MAX_NEW_TOKENS=10
 TEXTS_QA="true"
 IMAGES_QA="false"
-REPLACEMENT_LM_NAME="lmsys/vicuna-7b-v1.5"
-BATCH_SIZE=25
 
+BATCH_SIZE=25
+CHAT_MODE="true"
+CONTINUE_FINAL_MESSAGE="true"
+SEED=42
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
-FILENAME="multiple_choice_benchmarks_evaluation.py"
+FILENAME="evaluate_benchmarks.py"
 FILEPATH="$PROJECT_DIR/scripts/$FILENAME"
 BASE_DIR="$PROJECT_DIR/benchmarks_evaluation/"
 MODEL_CACHE_DIR="$HOME/scratch/huggingface/hub"
 DATASET_CACHE_DIR="$HOME/scratch/huggingface/datasets"
-SEED=42
 
 # --- Argument Construction ---
 # Initialize an array to hold script arguments
@@ -54,6 +58,10 @@ fi
 SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
 SCRIPT_ARGS+=(--guide-text "$GUIDE_TEXT")
 SCRIPT_ARGS+=(--batch-size "$BATCH_SIZE")
+SCRIPT_ARGS+=(--max-new-tokens "$MAX_NEW_TOKENS")
+if [ -n "$DOWNSAMPLE_SIZE" ]; then
+    SCRIPT_ARGS+=(--downsample-size "$DOWNSAMPLE_SIZE")
+fi
 SCRIPT_ARGS+=(--seed "$SEED")
 if [ "$REPLACE_MULTIMODAL_LM" = "true" ]; then
     SCRIPT_ARGS+=(--replacement-lm-name-or-path "$REPLACEMENT_LM_NAME")
@@ -81,11 +89,19 @@ echo "Text model: $TEXT_MODEL"
 echo "Dataset: $DATASET_NAME"
 echo "Dataset split: $DATASET_SPLIT"
 echo "Base dir: $BASE_DIR"
-echo "Chat mode: $CHAT_MODE"
-echo "Continue Final Message: $CONTINUE_FINAL_MESSAGE"
 echo "Question instruction type: $QUESTION_INSTRUCTION_TYPE"
 echo "Guide text: $GUIDE_TEXT"
 echo "Batch size: $BATCH_SIZE"
+echo "Max new tokens: $MAX_NEW_TOKENS"
+if [ "$CHAT_MODE" = "true" ]; then
+    echo "Chat mode: $CHAT_MODE"
+fi
+if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
+    echo "Continue final message: $CONTINUE_FINAL_MESSAGE"
+fi
+if [ -n "$DOWNSAMPLE_SIZE" ]; then
+    echo "Downsample size: $DOWNSAMPLE_SIZE"
+fi
 if [ "$TEXTS_QA" = "true" ]; then
     echo "Texts QA: $TEXTS_QA"
 fi

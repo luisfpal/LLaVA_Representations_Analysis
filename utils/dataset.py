@@ -222,15 +222,20 @@ class OpenVQADataset(Dataset):
         if self.texts_qa:
             captions = question_data.get("captions")
             if captions:
-                # Choose the longest caption as context
-                context = max(captions, key=len)
-                full_question_prompt += f"{context}\n"
+                # # Choose the longest caption as context
+                # context = max(captions, key=len)
+                # full_question_prompt += f"{context}\n"
 
-        full_question_prompt += "Answer the question using a single word or phrase.\n"
+                # Concatenate all the captions
+                full_question_prompt += f"Below are {len(captions)} descriptions of an image. Use them to answer the question.\n\n"
+                for idx, caption in zip(range(len(captions)), captions):
+                    full_question_prompt += f"{idx + 1}: {caption}\n"
+            else:
+                raise ValueError("No captions found in the dataset")
 
         # Choose one question-answer pair at random
         question_answer = random.choice(questions_and_answers)
-        full_question_prompt += f"{question_answer['question']}\n"
+        full_question_prompt += f"\n{question_answer['question']}\n"
 
         sample = {
             "question": full_question_prompt,

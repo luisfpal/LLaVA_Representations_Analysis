@@ -26,6 +26,7 @@ class HeadProjectionTracer:
             self.model = model
 
         self.target_layers = resolve_layer_indices(self.model, target_layers)
+        self.target_layers = [layer - 1 for layer in self.target_layers]
         self.target_heads = target_heads or {}
         self.tokens_mode = tokens_mode  # 'last' or 'mean'
         self.head_dim = (

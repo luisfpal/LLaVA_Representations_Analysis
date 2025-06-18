@@ -12,6 +12,7 @@ from utils import (
     parse_question_instruction,
     format_prompts,
     get_dataloader,
+    COCOQA_VI_DIGITS_MAP,
 )
 
 
@@ -26,11 +27,18 @@ def prepare_results_directory(args: argparse.Namespace) -> str:
     Returns:
         str: Path to the answers file.
     """
+
+    dataset_name = None
+    if "datasets" in args.dataset_name:
+        dataset_name = args.dataset_name.split("/")[-1]
+    else:
+        dataset_name = (args.dataset_name.replace("/", "_"),)
+
     args.base_dir = os.path.expanduser(args.base_dir)
     results_dir = os.path.join(
         args.base_dir,
         args.model_name_or_path.replace("/", "_"),
-        args.dataset_name.replace("/", "_"),
+        dataset_name,
         args.split,
     )
 
@@ -96,25 +104,51 @@ def process_predictions(predictions_file: str) -> dict:
     return evaluation_results
 
 
+def process_digits(text: str) -> str:
+    """
+    Replace digit strings in the text with their word equivalents.
+    Handles ambiguity by processing longer digits first.
+    """
+    # Sort keys in descending order of length to prevent substring replacement issues
+    for key in sorted(COCOQA_VI_DIGITS_MAP.keys(), key=len, reverse=True):
+        text = text.replace(key, COCOQA_VI_DIGITS_MAP[key])
+    return text
+
+
 def parse_predicted_answer(predicted_text: str, answer: str) -> str:
     """
-    Parse the predicted answer from the model's output.
-    By default the predicted answer will be generated with a single token
-    and thus this does a basic check to see if the predicted text matches the answer.
+    Parses the model's predicted answer and checks for a match against the ground truth.
+
+    This function handles two types of evaluation:
+    - Multiple-choice (single character answers, e.g., "A")
+    - Open-ended (free-form text answers, e.g., "apple")
+
+    It performs case-insensitive and trimmed matching, and handles partial matches for open-ended answers.
 
     Args:
-        predicted_text (str): The raw prediction text.
-        answer (str): The ground truth answer.
+        predicted_text (str): The raw output from the model.
+        answer (str): The correct answer to compare against.
 
     Returns:
-        str: The parsed answer character or 'FAILED' if parsing fails.
+        str: The parsed answer if it matches expectations, otherwise 'FAILED'.
     """
-    if len(predicted_text) == 1 and predicted_text == answer:
-        return predicted_text
-    elif answer in predicted_text:
-        return answer
-    else:
+    predicted_text = predicted_text.strip()
+    answer = answer.strip()
+
+    # Multiple-choice: expect exact match or contained match (e.g., "Answer: A")
+    if len(answer) == 1:
+        if predicted_text == answer:
+            return answer
+        if answer in predicted_text:
+            return answer
         return "FAILED"
+
+    # Open-ended: allow substring match (e.g., answer="apple", predicted="a green apple")
+    answer = answer.lower()
+    predicted_text = process_digits(predicted_text.lower())
+    if answer in predicted_text or predicted_text in answer:
+        return answer
+    return "FAILED"
 
 
 def save_evaluation_results(results: dict, results_file: str):
@@ -177,6 +211,8 @@ def eval_model(args: argparse.Namespace):
             images_qa=args.images_qa,
             batch_size=args.batch_size,
             question_instruction_type=args.question_instruction_type,
+            downsample_size=args.downsample_size,
+            seed=args.seed,
         )
 
         # Add padding token if processing a batch
@@ -268,10 +304,9 @@ def process_batches(dataloader, model, processor, answers_file, args):
             with torch.no_grad():
                 kwargs_for_generate = {
                     **model_inputs,
-                    "max_new_tokens": 1,
-                    "do_sample": (
-                        args.do_sample if hasattr(args, "do_sample") else False
-                    ),  # do_sample doesn't influence much for these kind of benchmarks
+                    "max_new_tokens": args.max_new_tokens,
+                    "do_sample": False,
+                    # do_sample doesn't influence much for multiple choice benchmarks
                 }
 
                 output_ids_tensor = model.generate(
@@ -350,7 +385,8 @@ def main():
     parser.add_argument("--continue-final-message", action="store_true", default=False)
     parser.add_argument("--guide-text", type=str, default="")
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--do-sample", action="store_true", default=False)
+    parser.add_argument("--max-new-tokens", type=int, default=1)
+    parser.add_argument("--downsample-size", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--replacement-lm-name-or-path", type=str, default=None)
     args = parser.parse_args()

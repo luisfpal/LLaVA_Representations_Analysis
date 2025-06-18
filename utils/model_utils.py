@@ -318,7 +318,9 @@ def resolve_layer_indices(
         layer_index: Specification of which layers to extract from.
 
     Returns:
-        List[int]: A list of layer indices to extract from.
+        List[int]: A list of layer indices to extract from, in the range 1 to num_layers.
+        For further applications, one might want to subtract 1 to get the indices
+        in the range 0 to num_layers - 1.
 
     Raises:
         ValueError: If the layers cannot be determined.
@@ -346,6 +348,11 @@ def resolve_layer_indices(
             )
         return layer_index
     elif isinstance(layer_index, int):
+        if not 1 <= layer_index <= num_layers:
+            raise ValueError(
+                f"Invalid layer index: {layer_index}. "
+                f"Expected an integer in the range 1 to {num_layers}."
+            )
         return [layer_index]
     else:
         raise ValueError(
