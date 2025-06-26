@@ -126,7 +126,7 @@ def heads_representations_extractor(
 
     tracer.trace()
 
-    # OPTIMIZATION 1: Pre-allocate final tensors instead of using lists
+    # Pre-allocate final tensors instead of using lists
     num_samples = len(dataloader.dataset)
     hidden_size = model.language_model.model.config.hidden_size
 
@@ -134,7 +134,7 @@ def heads_representations_extractor(
     final_projections_to_save = {}
     sample_idx = 0
 
-    # OPTIMIZATION 2: Get tensor keys from first batch to pre-allocate
+    # Get tensor keys from first batch to pre-allocate
     first_batch_processed = False
 
     update_every = max(1, int(0.05 * num_samples))
@@ -173,7 +173,7 @@ def heads_representations_extractor(
 
             _ = model(**model_inputs)
 
-            # OPTIMIZATION 3: Direct tensor copying instead of list accumulation
+            # Direct tensor copying instead of list accumulation
             projections = tracer.get_residual_stream_projections()
 
             # Pre-allocate tensors on first batch
@@ -191,7 +191,7 @@ def heads_representations_extractor(
                     f"Pre-allocated {len(final_projections_to_save)} tensors of shape ({num_samples}, {hidden_size})"
                 )
 
-            # OPTIMIZATION 4: Direct indexing instead of concatenation
+            # Direct indexing instead of concatenation
             for key, proj in projections.items():
                 end_idx = sample_idx + batch_size
                 final_projections_to_save[key][sample_idx:end_idx] = proj.cpu()
@@ -209,7 +209,7 @@ def heads_representations_extractor(
                 projections,
             )
 
-            # OPTIMIZATION 5: Less frequent memory cleanup
+            # Less frequent memory cleanup
             if batch_idx % update_every == 0:
                 progress_bar.update(update_every)
                 if (
@@ -230,7 +230,7 @@ def heads_representations_extractor(
     if save_data:
         print(f"Saving {len(final_projections_to_save)} tensors to {save_path}...")
 
-        # OPTIMIZATION 6: Efficient saving with memory management
+        # Efficient saving with memory management
         save_extracted_residual_stream_data(
             save_path, {"residual_stream_data": final_projections_to_save}
         )

@@ -441,7 +441,8 @@ def resolve_layer_indices(
 
     Args:
         model: The model to extract from.
-        layer_index: Specification of which layers to extract from.
+        layer_index: Specification of which layers to extract from. "all" for all layers,
+        a list of indices, or a single index.
 
     Returns:
         List[int]: A list of layer indices to extract from, in the range 1 to num_layers.

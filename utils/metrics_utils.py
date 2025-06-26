@@ -588,52 +588,64 @@ def id_scaling_gride(
     return torch.tensor(data.intrinsic_dim, dtype=torch.float32)
 
 
-def compute_renyi_entropy(
-    Z: torch.Tensor, alpha: float = 1.0, eps: float = 1e-12
-) -> float:
+# inspired by https://github.com/uk-cliplab/representation-itl/blob/main/src/repitl/matrix_itl.py
+# https://github.com/OFSkean/information_flow/blob/main/experiments/utils/metrics/metric_functions.py
+# https://github.com/OFSkean/information_flow/blob/main/experiments/utils/metrics/metric_calling.py
+def compute_matrix_renyi_entropy(Z: torch.Tensor, alpha: float = 1.0) -> float:
     """
-    Computes the Rényi entropy of order `alpha` for a matrix Z ∈ ℝ^{N × D}
+    Computes the Rényi entropy of order `alpha` for a matrix Z ∈ ℝ^{M × D}
+    S_alpha(K) = 1 / (1 - alpha) * log(sum_{i=1}^D (lambda_i(K)/trace(K))^alpha)
 
     Args:
-        Z (torch.Tensor): Input matrix of shape (N, D), where N = samples and D = features.
+        Z (torch.Tensor): Input matrix of shape (M, D), where M = samples or tokens and D = features.
         alpha (float): Rényi entropy order (α = 1 for Shannon).
-        eps (float): Small constant for numerical stability.
 
     Returns:
         Scalar entropy.
     """
-    # Convert to numpy and remove duplicates
     Z = Z.cpu().numpy()
+    # Remove duplicates
     Z, _ = np.unique(Z, axis=0, return_index=True)
     Z = torch.tensor(Z, dtype=torch.float32)
 
-    # Move to GPU if available
-    Z = _ensure_device(Z)
+    # Project each row to the unit sphere removing shared components in the direction of the mean
+    Z = normalize(Z)
 
-    # Compute the Gram matrix efficiently
-    N, D = Z.shape
-    if N <= D:
-        K = Z @ Z.T  # N x N
+    Z = _ensure_device(Z).double()
+
+    M, D = Z.shape
+    if M <= D:
+        K = Z @ Z.T  # M x M
     else:
         K = Z.T @ Z  # D x D
 
-    # Convert to double precision for eigendecomposition
-    K = K.double()
-
-    # Compute eigenvalues
-    eigenvalues = torch.linalg.eigvalsh(K)  # sorted, real, symmetric
-
     # Clamp negative eigenvalues due to numerical noise (due to numerical precision)
-    eigenvalues = torch.clamp(eigenvalues, min=0.0)
+    K = torch.clamp(K, min=0.0)
+    # Pre-normalize the kernel matrix -> surrogate Renyi entropy
+    K /= torch.trace(K)
 
-    # Normalize the eigenvalues to form a probability distribution
-    trace = torch.clamp(eigenvalues.sum(), min=eps)
-    p = eigenvalues / trace
+    eigenvalues = torch.linalg.eigvalsh(K)
+    eigenvalues = eigenvalues[eigenvalues > 0]
 
-    # Compute entropy
+    probabilities = eigenvalues / eigenvalues.sum()
+
     if abs(alpha - 1.0) < 1e-3:
-        entropy = -torch.sum(p * torch.log(p + eps))
+        entropy = -torch.sum(probabilities * torch.log(probabilities))
     else:
-        entropy = torch.log(torch.sum(p**alpha) + eps) / (1 - alpha)
+        entropy = torch.log(torch.sum(probabilities**alpha)) / (1 - alpha)
+
+    # maxEntropy normalization
+    entropy /= min(math.log(M), math.log(D))
 
     return entropy.item()
+
+
+# from https://github.com/waltonfuture/Matrix-Entropy
+def normalize(R):
+    # R is a tensor of shape (num_tokens, hidden_size) or (batch_size, hidden_size)
+    with torch.no_grad():
+        mean = R.mean(dim=0)
+        R = R - mean
+        norms = torch.norm(R, p=2, dim=1, keepdim=True)
+        R = R / norms
+    return R
