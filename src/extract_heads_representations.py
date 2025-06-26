@@ -12,7 +12,7 @@ class HeadProjectionTracer:
         tokens_mode: str = "last",
     ):
         """
-        Efficiently extract per-head projections from o_proj using slicing.
+        Efficiently extract per-head projections from o_proj using optimized tensor operations.
 
         Parameters:
         - model: HuggingFace transformer or Multimodal model (e.g., LLaVA)
@@ -33,23 +33,60 @@ class HeadProjectionTracer:
             self.model.config.hidden_size // self.model.config.num_attention_heads
         )
         self.hidden_size = self.model.config.hidden_size
+        self.num_heads = self.model.config.num_attention_heads
         self.residual_stream_projections = {}
         self.handles = []
 
-    def _make_hook(self, layer_idx, head_indices):
+        # OPTIMIZATION 1: Pre-compute weight slices and head indices for each layer
+        self._precomputed_weights = {}
+        self._layer_head_indices = {}
+
+    def _precompute_layer_info(self, layer_idx: int, module: torch.nn.Module):
+        """Pre-compute weight slices and head indices for efficient processing."""
+        # Determine head indices for this layer
+        head_indices = self.target_heads.get(layer_idx, None)
+        if head_indices is None:
+            local_head_indices = list(range(self.num_heads))
+        else:
+            local_head_indices = head_indices
+
+        self._layer_head_indices[layer_idx] = local_head_indices
+
+        # OPTIMIZATION 2: Pre-slice weight matrix for all heads
+        W = module.weight.data  # (hidden_size, hidden_size)
+        weight_slices = []
+
+        for h in local_head_indices:
+            start = h * self.head_dim
+            end = (h + 1) * self.head_dim
+            W_head = W[start:end, :]  # (head_dim, hidden_size)
+            weight_slices.append(W_head)
+
+        # Stack weight slices for vectorized operations
+        # Shape: (num_active_heads, head_dim, hidden_size)
+        if weight_slices:
+            self._precomputed_weights[layer_idx] = torch.stack(weight_slices, dim=0)
+        else:
+            self._precomputed_weights[layer_idx] = torch.empty(
+                0, self.head_dim, self.hidden_size
+            )
+
+    def _make_hook(self, layer_idx):
         """
-        Returns a hook that computes efficient head projections.
+        Returns an optimized hook that computes efficient head projections using vectorized operations.
         """
+        local_head_indices = self._layer_head_indices[layer_idx]
+        W_heads = self._precomputed_weights[
+            layer_idx
+        ]  # (num_heads, head_dim, hidden_size)
 
         def hook(module, input, output):
-            x = input[0]  # (batch, seq_len, hidden_size)
-            W = module.weight.data  # (hidden_size, hidden_size)
-            # Transpose W because we want to make a projection with x @ W
-            # W comes from o_proj which is applied like this:
-            # self.o_proj(x) = x @ W.T
-            # since I am using slices of W multiple times I just transpose it once here
+            if len(local_head_indices) == 0:
+                return
 
-            # Choose pooling strategy
+            x = input[0]  # (batch, seq_len, hidden_size)
+
+            # OPTIMIZATION 3: Efficient pooling
             if self.tokens_mode == "mean":
                 x_pooled = x.mean(dim=1)  # (batch, hidden_size)
             elif self.tokens_mode == "last":
@@ -57,44 +94,62 @@ class HeadProjectionTracer:
             else:
                 raise ValueError("mode must be 'last' or 'mean'")
 
-            # Determine head indices
-            if head_indices is None:
-                local_head_indices = list(range(self.hidden_size // self.head_dim))
-            else:
-                local_head_indices = head_indices
-
+            # OPTIMIZATION 4: Vectorized head processing
+            # Extract all head features at once
+            head_features = []
             for h in local_head_indices:
                 start = h * self.head_dim
                 end = (h + 1) * self.head_dim
+                head_features.append(x_pooled[:, start:end])
 
-                # Get submatrices
-                x_head = x_pooled[:, start:end]  # (batch, head_dim)
-                W_head = W[start:end, :]  # (head_dim, hidden_size)
+            # Stack head features: (num_heads, batch, head_dim)
+            x_heads = torch.stack(head_features, dim=0)
 
-                # Efficient linear projection
-                proj = x_head @ W_head  # (batch, hidden_size)
-                # proj = torch.matmul(x_head.view(-1, self.head_dim), W_head.view(self.head_dim, -1))  # (batch, hidden_size)
-                # torch.matmul can broadcast unexpectedly; shape-sensitive
+            # OPTIMIZATION 5: Batched matrix multiplication
+            # x_heads: (num_heads, batch, head_dim)
+            # W_heads: (num_heads, head_dim, hidden_size)
+            # Result: (num_heads, batch, hidden_size)
+            projections = torch.bmm(x_heads, W_heads)
 
-                key = f"layer_{layer_idx}/head_{h}"
-                self.residual_stream_projections[key] = proj.detach()
+            # OPTIMIZATION 6: Efficient result storage
+            # Store results with minimal dictionary operations
+            with torch.no_grad():
+                for i, h in enumerate(local_head_indices):
+                    key = f"layer_{layer_idx}/head_{h}"
+                    # Extract the projection for this head: (batch, hidden_size)
+                    self.residual_stream_projections[key] = projections[i].detach()
 
         return hook
 
     def trace(self):
+        """Set up hooks for all target layers with pre-computation."""
+        print(f"Setting up optimized hooks for {len(self.target_layers)} layers...")
+
         for layer_idx in self.target_layers:
-            head_indices = self.target_heads.get(layer_idx, None)
             o_proj = self.model.model.layers[layer_idx].self_attn.o_proj
-            hook = o_proj.register_forward_hook(
-                self._make_hook(layer_idx, head_indices)
-            )
+
+            # OPTIMIZATION 7: Pre-compute layer-specific information
+            self._precompute_layer_info(layer_idx, o_proj)
+
+            # Register optimized hook
+            hook = o_proj.register_forward_hook(self._make_hook(layer_idx))
             self.handles.append(hook)
+
+        total_heads = sum(len(indices) for indices in self._layer_head_indices.values())
+        print(
+            f"Hooks registered for {total_heads} heads across {len(self.target_layers)} layers"
+        )
 
     def get_residual_stream_projections(self) -> Dict[str, torch.Tensor]:
         return self.residual_stream_projections
 
     def clear(self):
+        """Clean up hooks and cached data."""
         for h in self.handles:
             h.remove()
         self.handles.clear()
         self.residual_stream_projections.clear()
+
+        # OPTIMIZATION 8: Clean up pre-computed data
+        self._precomputed_weights.clear()
+        self._layer_head_indices.clear()

@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # --- Configuration Section ---
-# GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
-GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
-DOWNSAMPLE_SIZE="2500"
+GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
+# GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
+DOWNSAMPLE_SIZE=""
 # DATASET_NAME_OR_PATH="cais/mmlu"
-# DATASET_NAME_OR_PATH="derek-thomas/ScienceQA"
-DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
-DATASET_SPLIT="" # Empty for cocoqa_captioning_restval
-QUESTION_INSTRUCTION_TYPE=""
+DATASET_NAME_OR_PATH="derek-thomas/ScienceQA"
+# DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
+DATASET_SPLIT="test"
+QUESTION_INSTRUCTION_TYPE="singular"
 TEXTS_QA="true"
 IMAGES_QA="false"
 BATCH_SIZE=1
@@ -18,6 +18,7 @@ TOKENS_MODE="last"
 
 MM_NAME="llava-hf/llava-1.5-7b-hf"
 LM_NAME="lmsys/vicuna-7b-v1.5"
+PRETRAINED_PROJECTOR_NAME_OR_PATH="liuhaotian/llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5"
 CHAT_MODE="true"
 CONTINUE_FINAL_MESSAGE="true"
 SEED=42
@@ -47,6 +48,7 @@ if [ "$IMAGES_QA" = "true" ]; then
 fi
 SCRIPT_ARGS+=(--mm-name-or-path "$MM_NAME")
 SCRIPT_ARGS+=(--lm-name-or-path "$LM_NAME")
+SCRIPT_ARGS+=(--pretrained-projector-name-or-path "$PRETRAINED_PROJECTOR_NAME_OR_PATH")
 SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
 if [ "$CHAT_MODE" = "true" ]; then
     SCRIPT_ARGS+=(--chat-mode)
@@ -77,6 +79,7 @@ echo "====== Extraction Configuration ======"
 echo "Representations directory: $REPRESENTATIONS_DIR"
 echo "MM model: $MM_NAME"
 echo "LM model: $LM_NAME"
+echo "Pretrained projector: $PRETRAINED_PROJECTOR_NAME_OR_PATH"
 echo "Dataset: $DATASET_NAME_OR_PATH"
 echo "Split: $DATASET_SPLIT"
 echo "Layer specification: $LAYER_INDEX"

@@ -10,6 +10,7 @@ import traceback
 from utils import (
     load_hf_model_and_processor_or_tokenizer,
     replace_multimodal_lm,
+    replace_multimodal_projector,
     seed_all,
     parse_layer_index,
     parse_question_instruction,
@@ -30,6 +31,8 @@ def heads_representations_extractor(
     args: argparse.Namespace,
     text_model: bool = False,
     replace_lm: bool = False,
+    pretrained_projector_name_or_path: Optional[str] = None,
+    replace_projector: bool = False,
     return_data: bool = False,
     save_data: bool = True,
     saved_paths: Optional[Dict[str, str]] = None,
@@ -42,6 +45,13 @@ def heads_representations_extractor(
         replacement_lm_name_or_path (Optional[str]): Path or name of the replacement language model.
         dataloader (DataLoader): Dataloader containing the dataset.
         args (argparse.Namespace): Parsed command line arguments containing various configurations.
+        text_model (bool): Whether the model is a text model.
+        replace_lm (bool): Whether to replace the language model.
+        pretrained_projector_name_or_path (Optional[str]): Path or name of the pretrained projector.
+        replace_projector (bool): Whether to replace the projector.
+        return_data (bool): Whether to return the data.
+        save_data (bool): Whether to save the data.
+        saved_paths (Optional[Dict[str, str]]): Dictionary of saved paths.
 
     Returns:
         Dict[str, torch.Tensor]: A dictionary mapping 'layer_{i}/head_{j}' to their corresponding representations.
@@ -63,6 +73,7 @@ def heads_representations_extractor(
     # Add chat_mode for create_filename (optional) and the format_prompts functions ("necessary")
     save_dir = os.path.join(save_dir, "heads_representations")
     os.makedirs(save_dir, exist_ok=True)
+    args.replace_projector = replace_projector  # name consistency
     save_filename = create_filename(args)
     save_path = os.path.join(save_dir, save_filename)
 
@@ -92,6 +103,13 @@ def heads_representations_extractor(
                 processor.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
                 model.language_model.resize_token_embeddings(len(processor.tokenizer))
 
+    if replace_projector and pretrained_projector_name_or_path is not None:
+        model = replace_multimodal_projector(
+            multimodal_model=model,
+            pretrained_projector_model_name_or_path=pretrained_projector_name_or_path,
+            cache_dir=args.model_cache_dir,
+        )
+
     if replacement_lm_name_or_path is not None and replace_lm:
         model = replace_multimodal_lm(
             multimodal_model=model,
@@ -108,17 +126,25 @@ def heads_representations_extractor(
 
     tracer.trace()
 
-    # Initialize a dictionary to hold all projections
-    all_projections = {}
-
+    # OPTIMIZATION 1: Pre-allocate final tensors instead of using lists
     num_samples = len(dataloader.dataset)
+    hidden_size = model.language_model.model.config.hidden_size
+
+    # Initialize pre-allocated tensors for efficient memory usage
+    final_projections_to_save = {}
+    sample_idx = 0
+
+    # OPTIMIZATION 2: Get tensor keys from first batch to pre-allocate
+    first_batch_processed = False
+
+    update_every = max(1, int(0.05 * num_samples))
     progress_bar = tqdm(total=num_samples, desc="Processing samples", unit="sample")
 
     with torch.no_grad():
-        for batch in dataloader:
+        for batch_idx, batch in enumerate(dataloader):
             questions_and_options = batch["questions"]
-            batch_size = len(questions_and_options)
             images = batch.get("images", None)
+            batch_size = len(questions_and_options)
 
             full_prompts = format_prompts(
                 questions_and_options=questions_and_options,
@@ -147,52 +173,73 @@ def heads_representations_extractor(
 
             _ = model(**model_inputs)
 
-            for key, proj in tracer.get_residual_stream_projections().items():
-                all_projections.setdefault(key, []).append(proj.cpu())
+            # OPTIMIZATION 3: Direct tensor copying instead of list accumulation
+            projections = tracer.get_residual_stream_projections()
+
+            # Pre-allocate tensors on first batch
+            if not first_batch_processed:
+                print(
+                    f"Pre-allocating tensors for {len(projections)} layer-head combinations..."
+                )
+                for key, proj in projections.items():
+                    # Pre-allocate tensor with full dataset size
+                    final_projections_to_save[key] = torch.empty(
+                        (num_samples, hidden_size), dtype=proj.dtype, device="cpu"
+                    )
+                first_batch_processed = True
+                print(
+                    f"Pre-allocated {len(final_projections_to_save)} tensors of shape ({num_samples}, {hidden_size})"
+                )
+
+            # OPTIMIZATION 4: Direct indexing instead of concatenation
+            for key, proj in projections.items():
+                end_idx = sample_idx + batch_size
+                final_projections_to_save[key][sample_idx:end_idx] = proj.cpu()
 
             tracer.residual_stream_projections.clear()
+            sample_idx += batch_size
 
+            # Clean up batch-specific variables
             del (
                 questions_and_options,
                 images,
                 full_prompts,
                 processor_kwargs,
                 model_inputs,
+                projections,
             )
-            gc.collect()
-            torch.cuda.empty_cache()
-            progress_bar.update(batch_size)
+
+            # OPTIMIZATION 5: Less frequent memory cleanup
+            if batch_idx % update_every == 0:
+                progress_bar.update(update_every)
+                if (
+                    batch_idx % (update_every * 4) == 0
+                ):  # Every 20% instead of every batch
+                    gc.collect()
+                    torch.cuda.empty_cache()
 
     progress_bar.close()
+    print("Tensor extraction completed. Cleaning up model resources...")
 
-    final_projections_to_save = {}
-    # Use list(all_projections.keys()) to create a copy, allowing you to delete from the original dict while iterating
-    for key in list(all_projections.keys()):
-        # Concatenate the tensors for the current key
-        concatenated_tensor = torch.cat(all_projections[key], dim=0)
-        final_projections_to_save[key] = concatenated_tensor
-
-        # Delete the list of smaller tensors for that key to free up memory immediately
-        del all_projections[key]
-        gc.collect()  # Explicitly ask Python's garbage collector to run
-
+    # Clean up model and tracer
     tracer.clear()
-    del (
-        model,
-        processor,
-        tracer,
-        all_projections,
-    )  # all_projections is now empty but we delete it anyway
+    del model, processor, tracer
     gc.collect()
     torch.cuda.empty_cache()
 
     if save_data:
+        print(f"Saving {len(final_projections_to_save)} tensors to {save_path}...")
+
+        # OPTIMIZATION 6: Efficient saving with memory management
         save_extracted_residual_stream_data(
             save_path, {"residual_stream_data": final_projections_to_save}
         )
+
         saved_paths[model_for_representations_extraction] = save_path
-        del final_projections_to_save
-        gc.collect()
+
+        if not return_data:
+            del final_projections_to_save
+            gc.collect()
 
     if return_data:
         return final_projections_to_save
@@ -214,6 +261,7 @@ def main():
     parser.add_argument("--images_qa", action="store_true", default=False)
     parser.add_argument("--mm-name-or-path", type=str, required=True)
     parser.add_argument("--lm-name-or-path", type=str, required=True)
+    parser.add_argument("--pretrained-projector-name-or-path", type=str, default=None)
     parser.add_argument(
         "--question-instruction-type", type=parse_question_instruction, default=None
     )
@@ -236,9 +284,22 @@ def main():
 
     # Setup
     parameters = [
-        {"model_name": args.mm_name_or_path, "replace_lm": False},
-        {"model_name": args.lm_name_or_path, "replace_lm": True},
+        {
+            "model_name": args.mm_name_or_path,
+            "replace_lm": False,
+            "replace_projector": False,
+        },
     ]
+
+    # Add projector replacement variant if specified
+    if args.pretrained_projector_name_or_path:
+        parameters.append(
+            {
+                "model_name": args.lm_name_or_path,
+                "replace_lm": True,
+                "replace_projector": True,
+            }
+        )
 
     # Prepare the dataloader
     print("Preparing dataloader...")
@@ -266,6 +327,8 @@ def main():
                 dataloader=dataloader,
                 args=args,
                 replace_lm=param["replace_lm"],
+                pretrained_projector_name_or_path=args.pretrained_projector_name_or_path,
+                replace_projector=param["replace_projector"],
                 save_data=True,
                 saved_paths=saved_paths,
             )

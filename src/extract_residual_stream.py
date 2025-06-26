@@ -53,6 +53,7 @@ def extract_residual_stream(
 
     # Create a single progress bar for all samples
     progress_bar = tqdm(total=num_samples, desc="Processing samples", unit="sample")
+    update_every = max(1, int(0.05 * num_samples))
 
     # Check if not empty chat_template exists
     chat_template_exists = False
@@ -100,7 +101,8 @@ def extract_residual_stream(
                     )
 
             input_counter += 1
-            progress_bar.update(1)
+            if input_counter % update_every == 0:
+                progress_bar.update(update_every)
 
         del (
             questions_and_options,

@@ -9,6 +9,7 @@ from utils import (
     load_hf_model_and_processor_or_tokenizer,
     generate_filename_suffix,
     replace_multimodal_lm,
+    replace_multimodal_projector,
     parse_question_instruction,
     format_prompts,
     get_dataloader,
@@ -32,7 +33,7 @@ def prepare_results_directory(args: argparse.Namespace) -> str:
     if "datasets" in args.dataset_name:
         dataset_name = args.dataset_name.split("/")[-1]
     else:
-        dataset_name = (args.dataset_name.replace("/", "_"),)
+        dataset_name = args.dataset_name.replace("/", "_")
 
     args.base_dir = os.path.expanduser(args.base_dir)
     results_dir = os.path.join(
@@ -193,6 +194,18 @@ def eval_model(args: argparse.Namespace):
         # Set the model to evaluation mode
         model.eval()
 
+        # Replace multimodal projector (if specified and not text model)
+        if (
+            hasattr(args, "pretrained_projector_name_or_path")
+            and args.pretrained_projector_name_or_path is not None
+            and not args.text_model
+        ):
+            model = replace_multimodal_projector(
+                multimodal_model=model,
+                pretrained_projector_model_name_or_path=args.pretrained_projector_name_or_path,
+                cache_dir=args.model_cache_dir,
+            )
+
         # Replace multimodal language model
         if args.replacement_lm_name_or_path is not None:
             model = replace_multimodal_lm(
@@ -256,6 +269,8 @@ def process_batches(dataloader, model, processor, answers_file, args):
     """
     num_samples = len(dataloader.dataset)
     progress_bar = tqdm(total=num_samples, desc="Processing samples", unit="sample")
+    counter = 0
+    update_every = max(1, int(0.05 * num_samples))
 
     # Check if not empty chat_template exists
     chat_template_exists = False
@@ -344,7 +359,9 @@ def process_batches(dataloader, model, processor, answers_file, args):
                 )
                 ans_file_handle.flush()  # Ensure data is written to disk periodically
 
-            progress_bar.update(len(answer_letters))
+            counter += len(answer_letters)
+            if counter % update_every == 0:
+                progress_bar.update(update_every)
 
             del (
                 questions_and_options,
@@ -389,6 +406,7 @@ def main():
     parser.add_argument("--downsample-size", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--replacement-lm-name-or-path", type=str, default=None)
+    parser.add_argument("--pretrained-projector-name-or-path", type=str, default=None)
     args = parser.parse_args()
 
     # Set the random seed for reproducibility

@@ -1,7 +1,8 @@
 tinkering/
 __pycache__/
 uv.lock
-.v.env/
+.venv/
 benchmarks_evaluation/
 .experiments_logs/
 results/
+old/

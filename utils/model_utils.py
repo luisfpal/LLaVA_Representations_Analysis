@@ -1,3 +1,4 @@
+from calendar import month_name
 import torch
 import os
 from typing import Tuple, Type, Union, List, Optional
@@ -11,9 +12,10 @@ from transformers import (
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
     AutoTokenizer,
-    # LlamaForCausalLM,  # Consider removing if AutoModelForCausalLM is sufficient
+    LlamaForCausalLM,  # Consider removing if AutoModelForCausalLM is sufficient
     # LlamaTokenizerFast, # Consider removing if AutoTokenizer is sufficient
 )
+from huggingface_hub import snapshot_download
 from PIL import Image
 from .constants import (
     ANSWER_TEXT,
@@ -233,7 +235,131 @@ def replace_multimodal_lm(
     # Move the updated llava model back to its original device
     multimodal_model.to(multimodal_model_device)
 
-    print("Successfully replaced multimodal language model.")
+    print("Successfully replaced multimodal language model.\n")
+    return multimodal_model
+
+
+def download_mm_projector_bin(
+    model_id: str,
+    cache_dir: str,
+):
+    """
+    Download the mm_projector.bin file from the model_id.
+    """
+    cache_dir = os.path.expanduser(cache_dir)
+
+    snapshot_download(repo_id=model_id, cache_dir=cache_dir)
+
+
+def find_mm_projector_bin(
+    model_id: str,
+    cache_dir: str,
+):
+    cache_dir = os.path.expanduser(cache_dir)
+
+    # Convert the model_id into the format huggingface_hub uses
+    model_dir = model_id.replace("/", "--")
+    full_model_dir = os.path.join(cache_dir, f"models--{model_dir}")
+
+    if not os.path.isdir(full_model_dir):
+        print(f"Model directory not found: {full_model_dir}")
+        print(f"Downloading model {model_id}...")
+        download_mm_projector_bin(model_id, cache_dir)
+        print(f"Model {model_id} downloaded successfully.")
+
+    # Find the snapshot directory inside that model directory
+    snapshots_dir = os.path.join(full_model_dir, "snapshots")
+    if not os.path.isdir(snapshots_dir):
+        raise FileNotFoundError(f"Snapshots directory not found: {snapshots_dir}")
+
+    snapshot_subdirs = os.listdir(snapshots_dir)
+    if not snapshot_subdirs:
+        raise FileNotFoundError(f"No snapshot found in: {snapshots_dir}")
+
+    snapshot_path = os.path.join(snapshots_dir, snapshot_subdirs[0])
+    projector_path = os.path.join(snapshot_path, "mm_projector.bin")
+
+    if not os.path.isfile(projector_path):
+        raise FileNotFoundError(f"mm_projector.bin not found in: {snapshot_path}")
+
+    return projector_path
+
+
+def replace_multimodal_projector(
+    multimodal_model: ModelType,
+    pretrained_projector_model_name_or_path: str,
+    cache_dir: str,
+) -> ModelType:
+    """
+    Replace the multi-modal projector in a multimodal model with weights from mm_projector.bin.
+
+    Args:
+        multimodal_model (ModelType): The multimodal model.
+        pretrained_projector_model_name_or_path (str): HF repo name with the mm_projector.bin file.
+        cache_dir (str): Hugging Face cache directory.
+
+    Returns:
+        ModelType: Updated multimodal model with projector weights replaced.
+    """
+    print(
+        f"\nReplacing multi-modal projector weights for {pretrained_projector_model_name_or_path}..."
+    )
+    device = next(multimodal_model.parameters()).device
+    projector_path = find_mm_projector_bin(
+        pretrained_projector_model_name_or_path, cache_dir
+    )
+    print(f"Found projector weights at: {projector_path}")
+    mm_state_dict = torch.load(projector_path, map_location="cpu")
+
+    if not hasattr(multimodal_model, "multi_modal_projector"):
+        raise AttributeError("Target model has no `multi_modal_projector` attribute.")
+
+    # Mapping from file keys to model attributes
+    projector_mapping = {
+        "model.mm_projector.0.weight": "linear_1.weight",
+        "model.mm_projector.0.bias": "linear_1.bias",
+        "model.mm_projector.2.weight": "linear_2.weight",
+        "model.mm_projector.2.bias": "linear_2.bias",
+    }
+
+    projector = multimodal_model.multi_modal_projector
+    multimodal_model.to("cpu")  # Reduce memory usage during assignment
+
+    print("Replacing multi-modal projector weights...")
+
+    with torch.no_grad():
+        for old_key, new_key in projector_mapping.items():
+            if not hasattr(projector, new_key.split(".")[0]):
+                raise AttributeError(f"Projector has no attribute `{new_key}`")
+
+            target_param = getattr(projector, new_key.split(".")[0])
+            param_tensor = mm_state_dict[old_key]
+
+            if "weight" in new_key:
+                if target_param.weight.shape != param_tensor.shape:
+                    raise ValueError(
+                        f"Shape mismatch: {new_key} — expected {target_param.weight.shape}, got {param_tensor.shape}"
+                    )
+                target_param.weight.copy_(param_tensor)
+            elif "bias" in new_key:
+                if target_param.bias.shape != param_tensor.shape:
+                    raise ValueError(
+                        f"Shape mismatch: {new_key} — expected {target_param.bias.shape}, got {param_tensor.shape}"
+                    )
+                target_param.bias.copy_(param_tensor)
+
+        # or simply
+        # projector_state_dict = {
+        #     projector_mapping[k]: v
+        #     for k, v in mm_state_dict.items()
+        #     if k in projector_mapping
+        # }
+
+        # # Load the weights into the model projector
+        # multimodal_model.multi_modal_projector.load_state_dict(projector_state_dict)
+
+    print("Multi-modal projector successfully updated with pre-trained weights.\n")
+    multimodal_model.to(device)
     return multimodal_model
 
 

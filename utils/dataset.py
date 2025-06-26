@@ -235,7 +235,7 @@ class OpenVQADataset(Dataset):
 
         # Choose one question-answer pair at random
         question_answer = random.choice(questions_and_answers)
-        full_question_prompt += f"\n{question_answer['question']}\n"
+        full_question_prompt += f"\n{question_answer['question']}?\n"
 
         sample = {
             "question": full_question_prompt,

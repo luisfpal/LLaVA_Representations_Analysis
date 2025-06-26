@@ -1,71 +1,44 @@
 import os
-import torch
 import argparse
 import matplotlib.pyplot as plt
-from safetensors.torch import load_file
 import pandas as pd
 import numpy as np
+from typing import Dict, Optional
 from utils import (
-    compute_neighborhood_overlap,
     seed_all,
     sample_unique_row_indices,
-    create_filename_suffix_from_paths,
+    create_filename_from_paths,
+    compute_similarity,
+    load_layers_residual_stream,
 )
 
 
-def load_residual_stream(file_path):
-    """Load residual stream data from a saved safetensors file."""
-    print(f"Loading data from {file_path}")
-
-    # Load tensors from safetensors file
-    tensors_dict = load_file(file_path)
-
-    # Check if we have multiple layers or just one
-    multi_layer = sum([key.startswith("layer_") for key in tensors_dict.keys()]) > 1
-
-    if multi_layer:
-        # Parse layer indices from keys
-        layers_data = {}
-        for key, tensor in tensors_dict.items():
-            if key.startswith("layer_"):
-                layer_idx = int(key.split("_")[1])
-                data = (
-                    tensor.cpu().numpy() if isinstance(tensor, torch.Tensor) else tensor
-                )
-                layers_data[layer_idx] = data
-
-        return True, layers_data
-    else:
-        # Single layer case
-        tensor = list(tensors_dict.values())[0]
-        data = tensor.cpu().numpy() if isinstance(tensor, torch.Tensor) else tensor
-        return False, data
-
-
-def plot_layer_overlaps(
-    layer_overlaps_df,
-    save_path,
-    plot_title="Layer-wise Neighborhood Overlap",
-):
+def plot_layer_similarity(
+    similarity_measures_df: pd.DataFrame,
+    save_path: str,
+    plot_title: str = "Layer-wise Similarity Measure",
+    measure: str = "neighborhood_overlap",
+) -> None:
     """
-    Create a plot of layer-wise neighborhood overlaps from a DataFrame.
+    Create a plot of layer-wise similarity measures from a DataFrame.
 
     Args:
-        layer_overlaps_df: DataFrame with columns ["Layer", "Neighborhood Overlap"]
+        similarity_measures_df: DataFrame with columns ["layer_index", "similarity_measure"]
         save_path: Path to save the plot
         plot_title: Title for the plot
+        measure: Similarity measure to plot
     """
-    # Ensure the data is sorted by the Layer index
-    df = layer_overlaps_df.sort_values(by="Layer").reset_index(drop=True)
+    # Ensure the data is sorted by the layer index
+    df = similarity_measures_df.sort_values(by="layer_index").reset_index(drop=True)
 
-    layers = df["Layer"].values
-    overlap_values = df["Neighborhood Overlap"].values
+    layers = df["layer_index"].values
+    similarity_values = df[measure].values
 
     # Create the plot with good aesthetics
     plt.figure(figsize=(10, 6))
     plt.plot(
         layers,
-        overlap_values,
+        similarity_values,
         marker="o",
         linestyle="-",
         linewidth=2,
@@ -74,15 +47,14 @@ def plot_layer_overlaps(
         markerfacecolor="white",
         markeredgewidth=2,
     )
-
     # Add grid, labels, and title
     plt.grid(True, linestyle="--", alpha=0.7)
     plt.xlabel("Layer Index", fontsize=14)
-    plt.ylabel("Neighborhood Overlap", fontsize=14)
+    plt.ylabel(measure, fontsize=14)
     plt.title(plot_title, fontsize=16)
 
     # Set axis limits with a bit of padding
-    plt.ylim([max(0, min(overlap_values) - 0.05), 1.05])
+    plt.ylim([max(0, min(similarity_values) - 0.05), 1.05])
 
     # Add background color and style
     plt.gca().set_facecolor("#F8F8F8")
@@ -107,27 +79,33 @@ def plot_layer_overlaps(
 
 
 def analyze_layers(
-    residual_stream_data1_path,
-    residual_stream_data2_path,
-    maxk=30,
-    downsample_size=None,
-):
+    residual_stream_data1_path: str,
+    residual_stream_data2_path: str,
+    measure: str = "neighborhood_overlap",
+    maxk: Optional[int] = None,
+    downsample_size: Optional[int] = None,
+    sigma: Optional[float] = None,
+    accept_rate: Optional[float] = None,
+) -> Dict[int, float]:
     """
-    Analyze neighborhood overlap between models layer by layer.
+    Compute a similarity measure between models layer by layer.
 
     Args:
         residual_stream_data1_path: Path to the first model's residual stream file
         residual_stream_data2_path: Path to the second model's residual stream file
+        measure: Similarity measure to compute
         maxk: Maximum number of nearest neighbors to consider
-
+        downsample_size: Maximum number of samples to consider
+        sigma: Sigma for the RBF kernel
+        accept_rate: Accept rate for the SVCCA similarity measure
     Returns:
-        Dictionary mapping layer indices to overlap scores
+        Dictionary mapping layer indices to similarity scores
     """
     # Load data from both models
     residual_stream_data1_path = os.path.expanduser(residual_stream_data1_path)
     residual_stream_data2_path = os.path.expanduser(residual_stream_data2_path)
-    is_multi_layer1, data1 = load_residual_stream(residual_stream_data1_path)
-    is_multi_layer2, data2 = load_residual_stream(residual_stream_data2_path)
+    is_multi_layer1, data1 = load_layers_residual_stream(residual_stream_data1_path)
+    is_multi_layer2, data2 = load_layers_residual_stream(residual_stream_data2_path)
 
     # Ensure both have the same format (multi-layer or single-layer)
     if is_multi_layer1 != is_multi_layer2:
@@ -135,7 +113,7 @@ def analyze_layers(
             "Both models must have the same layer structure (single or multi-layer)"
         )
 
-    layer_overlaps = {}
+    similarity_measures = {}
     reduced_unique_sample_indices = None
     data_size = None
     if is_multi_layer1:
@@ -148,7 +126,7 @@ def analyze_layers(
 
         print(f"Found {len(common_layers)} common layers: {common_layers}")
 
-        # Compute overlap for each common layer
+        # Compute similarity measure for each common layer
         for idx, layer_idx in enumerate(common_layers):
             print(f"\nAnalyzing layer {layer_idx}...")
             R1 = data1[layer_idx]
@@ -164,9 +142,11 @@ def analyze_layers(
             if reduced_unique_sample_indices is not None:
                 R1 = R1[reduced_unique_sample_indices]
                 R2 = R2[reduced_unique_sample_indices]
-            overlap = compute_neighborhood_overlap(R1, R2, maxk=maxk)
-            print(f"Layer {layer_idx} overlap: {overlap:.4f}")
-            layer_overlaps[layer_idx] = overlap
+            similarity_measure = compute_similarity(
+                R1, R2, measure=measure, maxk=maxk, sigma=sigma, accept_rate=accept_rate
+            )
+            print(f"Layer {layer_idx} {measure}: {similarity_measure:.4f}")
+            similarity_measures[layer_idx] = similarity_measure
     else:
         # Single layer case
         print("Analyzing single layer...")
@@ -181,25 +161,30 @@ def analyze_layers(
             print(f"Downsampling from {data_size} to {downsample_size} samples")
             R1 = R1[reduced_unique_sample_indices]
             R2 = R2[reduced_unique_sample_indices]
-        overlap = compute_neighborhood_overlap(R1, R2, maxk=maxk)
-        layer_overlaps[-1] = overlap  # Use -1 to indicate the default layer
-        print(f"Single layer overlap: {overlap:.4f}")
+        similarity_measure = compute_similarity(
+            R1, R2, measure=measure, maxk=maxk, sigma=sigma, accept_rate=accept_rate
+        )
+        similarity_measures[-1] = (
+            similarity_measure  # Use -1 to indicate the default layer
+        )
+        print(f"Single layer {measure}: {similarity_measure:.4f}")
 
-    return layer_overlaps
+    return similarity_measures
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Analyze residual stream neighborhood overlap"
+        description="Analyze residual stream similarity measures"
     )
     parser.add_argument("--residual-stream-path1", type=str, required=True)
     parser.add_argument("--residual-stream-path2", type=str, required=True)
     parser.add_argument("--result-parent-dir", type=str, required=True)
     parser.add_argument("--maxk", type=int, default=30)
-    parser.add_argument(
-        "--plot-title", type=str, default="Neighborhood Overlap Heatmap"
-    )
+    parser.add_argument("--plot-title", type=str, default="Similarity Measure Plot")
     parser.add_argument("--downsample-size", type=int, default=None)
+    parser.add_argument("--measure", type=str, default="neighborhood_overlap")
+    parser.add_argument("--accept-rate", type=float, default=0.95)
+    parser.add_argument("--sigma", type=float, default=0.1)
     args = parser.parse_args()
 
     # Set random seed for reproducibility
@@ -207,11 +192,9 @@ def main():
 
     # Set up directories for results
     base_dir = os.path.expanduser(args.result_parent_dir)
-    plot_dir = os.path.join(
-        base_dir, "plots/neighborhood_overlaps/layers_representations"
-    )
+    plot_dir = os.path.join(base_dir, f"plots/{args.measure}/layers_representations")
     results_dir = os.path.join(
-        base_dir, "results/neighborhood_overlaps/layers_representations"
+        base_dir, f"results/{args.measure}/layers_representations"
     )
 
     # Create plot directory if it doesn't exist
@@ -219,17 +202,13 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     # Create a suffix for the results filenames based on the paths
-    suffix_filename, model_name1, model_name2 = create_filename_suffix_from_paths(
+    filename, model_name1, model_name2 = create_filename_from_paths(
         args.residual_stream_path1,
         args.residual_stream_path2,
         args,
     )
 
-    layer_overlap_file_name = f"layer-overlap_{suffix_filename}.csv"
-    csv_path = os.path.join(
-        results_dir,
-        layer_overlap_file_name,
-    )
+    csv_path = os.path.join(results_dir, f"{filename}.csv")
 
     if not os.path.exists(csv_path):
         # Construct file paths
@@ -239,30 +218,39 @@ def main():
         }
 
         # Compute overlap between the models
-        layer_overlaps = analyze_layers(
+        similarity_measures = analyze_layers(
             file_paths[model_name1],
             file_paths[model_name2],
             maxk=args.maxk,
             downsample_size=args.downsample_size,
+            measure=args.measure,
+            sigma=args.sigma,
+            accept_rate=args.accept_rate,
         )
         # Save results to a csv file
-        layer_overlaps_df = pd.DataFrame(
-            list(layer_overlaps.items()), columns=["Layer", "Neighborhood Overlap"]
+        similarity_measures_df = pd.DataFrame(
+            list(similarity_measures.items()),
+            columns=["layer_index", args.measure],
         )
 
-        layer_overlaps_df.to_csv(csv_path, index=False)
-        print(f"Layer-wise neighborhood overlaps saved to {csv_path}")
+        similarity_measures_df.to_csv(csv_path, index=False)
+        print(f"Layer-wise {args.measure} saved to {csv_path}")
     else:
-        print(f"Layer-wise neighborhood overlaps already computed: {csv_path}")
-        layer_overlaps_df = pd.read_csv(csv_path)
+        print(f"Layer-wise {args.measure} already computed: {csv_path}")
+        similarity_measures_df = pd.read_csv(csv_path)
 
     # Generate plot if we have multiple layers
-    if len(layer_overlaps_df) != 1:
+    if len(similarity_measures_df) != 1:
         plot_path = os.path.join(
             plot_dir,
-            f"layer-overlap_{suffix_filename}.png",
+            f"{filename}.png",
         )
-        plot_layer_overlaps(layer_overlaps_df, plot_path, plot_title=args.plot_title)
+        plot_layer_similarity(
+            similarity_measures_df,
+            plot_path,
+            plot_title=args.plot_title,
+            measure=args.measure,
+        )
 
 
 if __name__ == "__main__":

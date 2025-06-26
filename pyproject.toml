@@ -144,7 +144,6 @@ dependencies = [
     # System & Performance
     "psutil==7.0.0",
     "ninja==1.11.1.4",
-    "gmpy2==2.1.5",
     "toolz==1.0.0",
     
     # Utilities & Helpers

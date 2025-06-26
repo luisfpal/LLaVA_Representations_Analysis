@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # --- Configuration Section ---
-# GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
-GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
-DOWNSAMPLE_SIZE="2500"
+GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
+# GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
+DOWNSAMPLE_SIZE=""
 MODEL_NAME="llava-hf/llava-1.5-7b-hf"
 # MODEL_NAME="lmsys/vicuna-7b-v1.5"
 # MODEL_NAME="meta-llama/Llama-2-7b-hf"
@@ -11,14 +11,16 @@ MODEL_NAME="llava-hf/llava-1.5-7b-hf"
 TEXT_MODEL="false"
 REPLACE_MULTIMODAL_LM="true"
 REPLACEMENT_LM_NAME="lmsys/vicuna-7b-v1.5"
+REPLACE_MULTIMODAL_PROJECTOR="true"
+PRETRAINED_PROJECTOR_NAME_OR_PATH="liuhaotian/llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5"
 # DATASET_NAME="cais/mmlu"
-# DATASET_NAME="derek-thomas/ScienceQA"
-DATASET_NAME="~/scratch/datasets/cocoqa_captioning_restval"
-DATASET_SPLIT=""
-QUESTION_INSTRUCTION_TYPE=""
-MAX_NEW_TOKENS=10
-TEXTS_QA="true"
-IMAGES_QA="false"
+DATASET_NAME="derek-thomas/ScienceQA"
+# DATASET_NAME="~/scratch/datasets/cocoqa_captioning_restval"
+DATASET_SPLIT="test"
+QUESTION_INSTRUCTION_TYPE="singular"
+MAX_NEW_TOKENS=1
+TEXTS_QA="false"
+IMAGES_QA="true"
 
 BATCH_SIZE=25
 CHAT_MODE="true"
@@ -66,6 +68,9 @@ SCRIPT_ARGS+=(--seed "$SEED")
 if [ "$REPLACE_MULTIMODAL_LM" = "true" ]; then
     SCRIPT_ARGS+=(--replacement-lm-name-or-path "$REPLACEMENT_LM_NAME")
 fi
+if [ "$REPLACE_MULTIMODAL_PROJECTOR" = "true" ] && [ -n "$PRETRAINED_PROJECTOR_NAME_OR_PATH" ]; then
+    SCRIPT_ARGS+=(--pretrained-projector-name-or-path "$PRETRAINED_PROJECTOR_NAME_OR_PATH")
+fi
 
 # --- Debugger ---
 # Check if debugging is enabled via command-line argument (e.g., ./script.sh --debug)
@@ -78,6 +83,18 @@ fi
 # --- Ensure the MODEL_NAME AND REPLACEMENT_LM_NAME are not the same if REPLACE_MULTIMODAL_LM is true ---
 if [ "$REPLACE_MULTIMODAL_LM" = "true" ] && [ "$MODEL_NAME" = "$REPLACEMENT_LM_NAME" ]; then
     echo "Error: MODEL_NAME and REPLACEMENT_LM_NAME cannot be the same when REPLACE_MULTIMODAL_LM is true."
+    exit 1
+fi
+
+# --- Ensure projector replacement is only used with multimodal models ---
+if [ "$REPLACE_MULTIMODAL_PROJECTOR" = "true" ] && [ "$TEXT_MODEL" = "true" ]; then
+    echo "Error: Cannot replace multimodal projector when TEXT_MODEL is true."
+    exit 1
+fi
+
+# --- Ensure projector path is provided when replacement is enabled ---
+if [ "$REPLACE_MULTIMODAL_PROJECTOR" = "true" ] && [ -z "$PRETRAINED_PROJECTOR_NAME_OR_PATH" ]; then
+    echo "Error: PRETRAINED_PROJECTOR_NAME_OR_PATH must be provided when REPLACE_MULTIMODAL_PROJECTOR is true."
     exit 1
 fi
 
@@ -111,6 +128,9 @@ fi
 echo "Seed: $SEED"
 if [ "$REPLACE_MULTIMODAL_LM" = "true" ]; then
     echo "Replacing Multimodal LM with: $REPLACEMENT_LM_NAME"
+fi
+if [ "$REPLACE_MULTIMODAL_PROJECTOR" = "true" ]; then
+    echo "Replacing Multimodal Projector with: $PRETRAINED_PROJECTOR_NAME_OR_PATH"
 fi
 if [ "$1" = "--debug" ]; then
     echo "Debugger: ${DEBUGGER_ARGS[*]}"

@@ -4,14 +4,14 @@
 # !Some arguments make sense only for certain datasets.
 
 # --- Configuration Section ---
-# GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
-GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
-DOWNSAMPLE_SIZE="2500"
+GUIDE_TEXT=$'\nAnswer ONLY with the option\'s letter from the given choices directly.\n'
+# GUIDE_TEXT=$'Answer the question using a single word or phrase.\n'
+DOWNSAMPLE_SIZE=""
 # DATASET_NAME_OR_PATH="cais/mmlu"
-# DATASET_NAME_OR_PATH="derek-thomas/ScienceQA"
-DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
-DATASET_SPLIT="" # Empty for cocoqa_captioning_restval
-QUESTION_INSTRUCTION_TYPE=""
+DATASET_NAME_OR_PATH="derek-thomas/ScienceQA"
+# DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_captioning_restval"
+DATASET_SPLIT="test" # Empty for cocoqa_captioning_restval
+QUESTION_INSTRUCTION_TYPE="singular"
 TEXTS_QA="false"
 IMAGES_QA="true"
 
@@ -21,6 +21,7 @@ MEAN_OVER_TOKENS="false"
 
 MM_NAME="llava-hf/llava-1.5-7b-hf"
 LM_NAME="lmsys/vicuna-7b-v1.5"
+PRETRAINED_PROJECTOR_NAME_OR_PATH="liuhaotian/llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5"
 CHAT_MODE="true"
 CONTINUE_FINAL_MESSAGE="true"
 SEED=42
@@ -54,17 +55,16 @@ fi
 if [ "$CHAT_MODE" = "true" ]; then
     SCRIPT_ARGS+=(--chat-mode)
 fi
-if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
-    SCRIPT_ARGS+=(--continue-final-message)
-fi
 SCRIPT_ARGS+=(--mm-name-or-path "$MM_NAME")
 SCRIPT_ARGS+=(--lm-name-or-path "$LM_NAME")
+SCRIPT_ARGS+=(--pretrained-projector-name-or-path "$PRETRAINED_PROJECTOR_NAME_OR_PATH")
 SCRIPT_ARGS+=(--question-instruction-type "$QUESTION_INSTRUCTION_TYPE")
-if [ -n "$DOWNSAMPLE_SIZE" ]; then
-    SCRIPT_ARGS+=(--downsample-size "$DOWNSAMPLE_SIZE")
-fi
 if [ "$CONTINUE_FINAL_MESSAGE" = "true" ]; then
     SCRIPT_ARGS+=(--continue-final-message)
+fi
+SCRIPT_ARGS+=(--guide-text "$GUIDE_TEXT")
+if [ -n "$DOWNSAMPLE_SIZE" ]; then
+    SCRIPT_ARGS+=(--downsample-size "$DOWNSAMPLE_SIZE")
 fi
 SCRIPT_ARGS+=(--seed "$SEED")
 
@@ -92,6 +92,7 @@ echo "Token index: $TOKEN_INDEX"
 echo "Mean over tokens: $MEAN_OVER_TOKENS"
 echo "Question instruction type: $QUESTION_INSTRUCTION_TYPE"
 echo "Guide text: $GUIDE_TEXT"
+echo "Pretrained projector: $PRETRAINED_PROJECTOR_NAME_OR_PATH"
 if [ "$CHAT_MODE" = "true" ]; then
     echo "Chat mode: $CHAT_MODE"
 fi

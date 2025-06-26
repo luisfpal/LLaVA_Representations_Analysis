@@ -12,6 +12,7 @@ from utils import (
     setup_directories,
     save_extracted_residual_stream_data,
     get_dataloader,
+    replace_multimodal_projector,
 )
 from src.extract_residual_stream import extract_residual_stream
 
@@ -22,6 +23,8 @@ def extract_and_save_residual_streams(
     args: argparse.Namespace,
     replacement_lm_name_or_path: Optional[str] = None,
     replace_lm: bool = False,
+    pretrained_projector_name_or_path: Optional[str] = None,
+    replace_projector: bool = False,
 ) -> str:
     """
     Extract and save residual streams from a model for a dataset.
@@ -30,7 +33,10 @@ def extract_and_save_residual_streams(
         model_name: Name or path of the model
         text_model: Boolean indicating if the model is a text model
         args: Argument namespace containing various parameters
-
+        replacement_lm_name_or_path: Name or path of the replacement language model
+        replace_lm: Boolean indicating if the language model should be replaced
+        pretrained_projector_name_or_path: Name or path of the pretrained projector
+        replace_projector: Boolean indicating if the projector should be replaced
     Returns:
         str: Path to the saved file
     """
@@ -50,6 +56,7 @@ def extract_and_save_residual_streams(
 
     save_dir = os.path.join(save_dir, "layers_representations")
     os.makedirs(save_dir, exist_ok=True)
+    args.replace_projector = replace_projector  # name consistency
     save_filename = create_filename(args)
     save_path = os.path.join(save_dir, save_filename)
 
@@ -72,7 +79,14 @@ def extract_and_save_residual_streams(
         # Set the model to evaluation mode
         model.eval()
 
-        # Replace LLaVA language model
+        if replace_projector and pretrained_projector_name_or_path is not None:
+            model = replace_multimodal_projector(
+                multimodal_model=model,
+                pretrained_projector_model_name_or_path=pretrained_projector_name_or_path,
+                cache_dir=args.model_cache_dir,
+            )
+
+        # Replace multimodal language model
         if replacement_lm_name_or_path is not None and replace_lm:
             model = replace_multimodal_lm(
                 multimodal_model=model,
@@ -134,6 +148,7 @@ def main():
     parser.add_argument("--chat-mode", action="store_true", default=False)
     parser.add_argument("--mm-name-or-path", type=str, required=True)
     parser.add_argument("--lm-name-or-path", type=str, required=True)
+    parser.add_argument("--pretrained-projector-name-or-path", type=str, default=None)
     parser.add_argument(
         "--question-instruction-type", type=parse_question_instruction, default=None
     )
@@ -154,8 +169,16 @@ def main():
 
     # Setup
     parameters = [
-        {"model_name": args.mm_name_or_path, "replace_lm": False},
-        {"model_name": args.lm_name_or_path, "replace_lm": True},
+        {
+            "model_name": args.mm_name_or_path,
+            "replace_lm": False,
+            "replace_projector": False,
+        },
+        {
+            "model_name": args.lm_name_or_path,
+            "replace_lm": True,
+            "replace_projector": True,
+        },
     ]
 
     # Ensure only mean_over_tokens or token_index is set
@@ -173,6 +196,8 @@ def main():
                 args=args,
                 replacement_lm_name_or_path=args.lm_name_or_path,
                 replace_lm=param["replace_lm"],
+                pretrained_projector_name_or_path=args.pretrained_projector_name_or_path,
+                replace_projector=param["replace_projector"],
             )
 
             saved_paths[model_for_representations_extraction] = save_path
