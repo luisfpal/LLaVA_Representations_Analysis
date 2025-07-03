@@ -1,8 +1,6 @@
-from calendar import month_name
 import torch
 import os
-from typing import Tuple, Type, Union, List, Optional
-import argparse
+from typing import Tuple, Type, Union, List
 from transformers import (
     LlavaProcessor,
     LlavaForConditionalGeneration,
@@ -12,16 +10,10 @@ from transformers import (
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
     AutoTokenizer,
-    LlamaForCausalLM,  # Consider removing if AutoModelForCausalLM is sufficient
-    # LlamaTokenizerFast, # Consider removing if AutoTokenizer is sufficient
+    # LlamaForCausalLM,
+    # LlamaTokenizerFast
 )
 from huggingface_hub import snapshot_download
-from PIL import Image
-from .constants import (
-    ANSWER_TEXT,
-    SYSTEM_ROLE,
-    ASSISTANT_ROLE,
-)
 
 # Define supported vision-language model types and their corresponding classes
 SUPPORTED_VL_MODELS = {
@@ -40,9 +32,10 @@ SUPPORTED_VL_MODELS = {
 }
 
 # Define types for clarity
-ProcessorType = Union[LlavaProcessor, PaliGemmaProcessor]
+ProcessorType = Union[LlavaProcessor, LlavaNextProcessor, PaliGemmaProcessor]
 ModelType = Union[
     LlavaForConditionalGeneration,
+    LlavaNextForConditionalGeneration,
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
 ]
@@ -81,7 +74,13 @@ def load_hf_model_and_processor_or_tokenizer(
     attn_implementation: str = "flash_attention_2",
     low_cpu_mem_usage: bool = True,
     use_fast: bool = True,
-) -> Tuple[ModelType, Union[ProcessorType, AutoTokenizer]]:
+    not_model: bool = False,
+    not_processor: bool = False,
+) -> Union[
+    ModelType,
+    ProcessorType,
+    Tuple[ModelType, Union[ProcessorType, AutoTokenizer]],
+]:
     """
     Load a Hugging Face model and its processor or tokenizer.
 
@@ -94,15 +93,20 @@ def load_hf_model_and_processor_or_tokenizer(
         attn_implementation (str): Attention implementation type.
         low_cpu_mem_usage (bool): Optimize for low CPU memory usage.
         use_fast (bool): Use the fast version of the processor if available.
+        not_model (bool): Whether to not load the model.
+        not_processor (bool): Whether to not load the processor.
 
     Returns:
-        Tuple[ModelType, Union[ProcessorType, AutoTokenizer]]: The loaded model and processor/tokenizer.
+        The loaded model and processor/tokenizer or just the model or the processor.
 
     Raises:
         ValueError: If the model type is unsupported.
         RuntimeError: If loading the model or processor fails.
     """
     cache_dir = os.path.expanduser(cache_dir)
+
+    if not_model and not_processor:
+        raise ValueError("Cannot not load both the model and the processor.")
 
     try:
         if not text_model:
@@ -126,30 +130,70 @@ def load_hf_model_and_processor_or_tokenizer(
         "torch_dtype": dtype,
     }
 
-    try:
-        processor = ProcessorClass.from_pretrained(
-            **processor_kwargs, use_fast=use_fast
-        )
+    if not not_processor:
+        try:
+            print(f"\nLoading {model_name_or_path} processor...")
+            processor = ProcessorClass.from_pretrained(
+                **processor_kwargs, use_fast=use_fast
+            )
 
-        if "vicuna" in model_name_or_path.lower():
-            chat_template = """
-            {% for message in messages %}{% if message['role'] != 'system' %}{{ message['role'].upper() + ': '}}{% endif %}{# Render all images first #}{% for content in message['content'] | selectattr('type', 'equalto', 'image') %}{{ '<image>\n' }}{% endfor %}{# Render all text next #}{% if message['role'] != 'assistant' %}{% for content in message['content'] | selectattr('type', 'equalto', 'text') %}{{ content['text'] + ' '}}{% endfor %}{% else %}{% for content in message['content'] | selectattr('type', 'equalto', 'text') %}{% generation %}{{ content['text'] + ' '}}{% endgeneration %}{% endfor %}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ 'ASSISTANT:' }}{% endif %}
-            """.strip()
-            processor.chat_template = chat_template
-    except Exception as e:
-        raise RuntimeError(
-            "Failed to load "
-            f"{('processor' if not text_model else 'tokenizer')} "
-            f"for {model_name_or_path} from cache {cache_dir}. Error: {e}"
-        )
-    try:
-        model = ModelClass.from_pretrained(**model_kwargs)
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to load model for '{model_name_or_path}' from cache '{cache_dir}'. Error: {e}"
-        )
+            if "vicuna" in model_name_or_path.lower():
+                chat_template = """
+                {% for message in messages %}{% if message['role'] != 'system' %}{{ message['role'].upper() + ': '}}{% endif %}{# Render all images first #}{% for content in message['content'] | selectattr('type', 'equalto', 'image') %}{{ '<image>\n' }}{% endfor %}{# Render all text next #}{% if message['role'] != 'assistant' %}{% for content in message['content'] | selectattr('type', 'equalto', 'text') %}{{ content['text'] + ' '}}{% endfor %}{% else %}{% for content in message['content'] | selectattr('type', 'equalto', 'text') %}{% generation %}{{ content['text'] + ' '}}{% endgeneration %}{% endfor %}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ 'ASSISTANT:' }}{% endif %}
+                """.strip()
+                processor.chat_template = chat_template
+        except Exception as e:
+            raise RuntimeError(
+                "Failed to load "
+                f"{('processor' if not text_model else 'tokenizer')} "
+                f"for {model_name_or_path} from cache {cache_dir}. Error: {e}"
+            )
+    if not not_model:
+        try:
+            print(f"\nLoading {model_name_or_path} model...")
+            model = ModelClass.from_pretrained(**model_kwargs)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load model for '{model_name_or_path}' from cache '{cache_dir}'. Error: {e}"
+            )
+
+    if not_model:
+        return processor
+    elif not_processor:
+        return model
 
     return model, processor
+
+
+def get_hidden_size(model) -> int:
+    """
+    Retrieves the hidden dimension size from the model configuration.
+    Tries to access `config.hidden_size` and then `language_model.config.hidden_size`.
+
+    Args:
+        model: The model to inspect.
+
+    Returns:
+        int: The hidden size dimension.
+
+    Raises:
+        ValueError: If the hidden size cannot be determined.
+    """
+    hidden_size = getattr(getattr(model, "config", None), "hidden_size", None)
+    if hidden_size is not None:
+        return hidden_size
+
+    hidden_size = getattr(
+        getattr(getattr(model, "language_model", None), "config", None),
+        "hidden_size",
+        None,
+    )
+    if hidden_size is not None:
+        return hidden_size
+
+    raise ValueError(
+        "Could not determine model hidden size: No valid config.hidden_size found"
+    )
 
 
 def replace_multimodal_lm(
@@ -175,7 +219,7 @@ def replace_multimodal_lm(
         f"\nLoading {replacement_lm_name_or_path} model for language model replacement..."
     )
     # Load the replacement language model (e.g., Vicuna)
-    replacement_lm, _ = load_hf_model_and_processor_or_tokenizer(
+    replacement_lm = load_hf_model_and_processor_or_tokenizer(
         model_name_or_path=replacement_lm_name_or_path,
         cache_dir=cache_dir,
         text_model=True,
@@ -183,6 +227,7 @@ def replace_multimodal_lm(
         dtype=torch.float16,
         attn_implementation="flash_attention_2",
         low_cpu_mem_usage=True,
+        not_processor=True,
     )
 
     # Check if the type of the replacement model is compatible
@@ -229,7 +274,7 @@ def replace_multimodal_lm(
     # !in transformers/models/llava/modeling_llava.py, version 4.50.1.
 
     # Remove the vicuna model and its tokenizer from memory
-    del replacement_lm, _
+    del replacement_lm
     torch.cuda.empty_cache()
 
     # Move the updated llava model back to its original device
@@ -361,73 +406,6 @@ def replace_multimodal_projector(
     print("Multi-modal projector successfully updated with pre-trained weights.\n")
     multimodal_model.to(device)
     return multimodal_model
-
-
-def format_prompts(
-    questions_and_options: List[str],
-    images: Optional[Image.Image],
-    args: argparse.Namespace,
-    processor: ProcessorType,
-    chat_template_exists: bool = False,
-) -> List:
-    """
-    Format input questions and images into structured prompts for a model.
-
-    Parameters:
-        questions_and_options: List of question and options in string format.
-        images: List of images associated with each question.
-        args: Arguments namespace with a `chat_mode` boolean attribute.
-
-    Returns:
-        list: Formatted prompts either as conversations (dict format) or plain strings.
-    """
-
-    if args.chat_mode and chat_template_exists:
-        conversations_list = _format_as_conversations(
-            questions_and_options, images, args
-        )
-        kwargs_chat_template = {
-            "conversation": conversations_list,
-            "tokenize": False,
-        }
-        if args.continue_final_message:
-            kwargs_chat_template["continue_final_message"] = True
-            kwargs_chat_template["add_generation_prompt"] = False
-        else:
-            kwargs_chat_template["add_generation_prompt"] = True
-        # Apply the chat template to format the conversations
-        return processor.apply_chat_template(**kwargs_chat_template)
-
-    else:
-        return _format_as_plain_prompts(questions_and_options, images)
-
-
-def _format_as_conversations(questions_and_options, images, args):
-    formatted_conversations = []
-    continue_final_message = (
-        hasattr(args, "continue_final_message") and args.continue_final_message
-    )
-    for question_text, image in zip(questions_and_options, images):
-        content = [{"type": "text", "text": f"{question_text}{args.guide_text}"}]
-
-        if image is not None:
-            content.append({"type": "image"})
-
-        conversation = [{"role": "user", "content": content}]
-        conversation.insert(0, SYSTEM_ROLE)
-        if continue_final_message:
-            conversation.append(ASSISTANT_ROLE)
-        formatted_conversations.append(conversation)
-    return formatted_conversations
-
-
-def _format_as_plain_prompts(questions_and_options, images):
-    formatted_prompts = []
-    for image, question_text in zip(images, questions_and_options):
-        prompt_prefix = "<image>\n" if image is not None else ""
-        prompt = f"{prompt_prefix}{question_text}{ANSWER_TEXT}"
-        formatted_prompts.append(prompt)
-    return formatted_prompts
 
 
 def resolve_layer_indices(

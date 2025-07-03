@@ -284,13 +284,13 @@ def process_batches(dataloader, model, processor, answers_file, args):
     with open(answers_file, "w") as ans_file_handle:
         # Process each batch
         for batch in dataloader:
-            questions_and_options = batch["questions"]
+            questions = batch["questions"]
             images = batch.get("images", None)
             answer_letters = batch["answer_letters"]
 
             # Process each question in the batch
             full_prompts = format_prompts(
-                questions_and_options=questions_and_options,
+                questions=questions,
                 images=images,
                 args=args,
                 processor=processor,
@@ -364,7 +364,7 @@ def process_batches(dataloader, model, processor, answers_file, args):
                 progress_bar.update(update_every)
 
             del (
-                questions_and_options,
+                questions,
                 images,
                 answer_letters,
                 full_prompts,

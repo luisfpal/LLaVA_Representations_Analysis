@@ -6,7 +6,7 @@ REPRESENTATIONS_PATH="$HOME/scratch/representations"
 # Configuration for which model and dataset to analyze
 # MODEL="llava-hf_llava-1.5-7b-hf"
 MODEL="lmsys_vicuna-7b-v1.5"
-DATASET="cocoqa_captioning_restval"
+DATASET="cocoqa_unified"
 MODALITY="img"
 
 # Construct the filename based on the configuration
@@ -20,7 +20,7 @@ if [ "$DATASET" == "ScienceQA" ]; then
 elif [ "$DATASET" == "mmlu" ]; then
     FILENAME="layer-all_token-last_pproj_txt-qa_chat_qitype-singular_gtxt_cfm_ds2500_s42.safetensors"
     SPLIT="test"
-elif [ "$DATASET" == "cocoqa_captioning_restval" ]; then
+elif [ "$DATASET" == "cocoqa_unified" ]; then
     if [ "$MODALITY" == "txt" ]; then
         FILENAME="layer-all_token-last_pproj_txt-qa_chat_gtxt_cfm_ds2500_s42.safetensors"
     elif [ "$MODALITY" == "img" ]; then

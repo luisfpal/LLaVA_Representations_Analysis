@@ -13,12 +13,12 @@ RESIDUAL_STREAM_ABS_PATH1="$REPRESENTATIONS_PATH/llava-hf_llava-1.5-7b-hf/Scienc
 ### ScienceQA Image
 # FILENAME1="layer-all_token-last_pproj_img-qa_chat_qitype-singular_gtxt_cfm_s42.safetensors"
 # RESIDUAL_STREAM_ABS_PATH1="$REPRESENTATIONS_PATH/llava-hf_llava-1.5-7b-hf/ScienceQA/test/layers_representations/$FILENAME1"
-### COCOQA Captioning Restval Text
+### COCOQA Unified Text
 # FILENAME1="layer-all_token-last_pproj_txt-qa_chat_gtxt_cfm_ds2500_s42.safetensors"
-# RESIDUAL_STREAM_ABS_PATH1="$REPRESENTATIONS_PATH/llava-hf_llava-1.5-7b-hf/cocoqa_captioning_restval/layers_representations/$FILENAME1"
-### COCOQA Captioning Restval Image
+# RESIDUAL_STREAM_ABS_PATH1="$REPRESENTATIONS_PATH/llava-hf_llava-1.5-7b-hf/cocoqa_unified/layers_representations/$FILENAME1"
+### COCOQA Unified Image
 # FILENAME1="layer-all_token-last_pproj_img-qa_chat_gtxt_cfm_ds2500_s42.safetensors"
-# RESIDUAL_STREAM_ABS_PATH1="$REPRESENTATIONS_PATH/llava-hf_llava-1.5-7b-hf/cocoqa_captioning_restval/layers_representations/$FILENAME1"
+# RESIDUAL_STREAM_ABS_PATH1="$REPRESENTATIONS_PATH/llava-hf_llava-1.5-7b-hf/cocoqa_unified/layers_representations/$FILENAME1"
 
 # Vicuna 1.5 7B
 ### MMLU
@@ -30,12 +30,12 @@ RESIDUAL_STREAM_ABS_PATH2="$REPRESENTATIONS_PATH/lmsys_vicuna-7b-v1.5/ScienceQA/
 ### ScienceQA Image
 # FILENAME2="layer-all_token-last_pproj_img-qa_chat_qitype-singular_gtxt_cfm_s42.safetensors"
 # RESIDUAL_STREAM_ABS_PATH2="$REPRESENTATIONS_PATH/lmsys_vicuna-7b-v1.5/ScienceQA/test/layers_representations/$FILENAME2"
-### COCOQA Captioning Restval Text
+### COCOQA Unified Text
 # FILENAME2="layer-all_token-last_pproj_txt-qa_chat_gtxt_cfm_ds2500_s42.safetensors"
-# RESIDUAL_STREAM_ABS_PATH2="$REPRESENTATIONS_PATH/lmsys_vicuna-7b-v1.5/cocoqa_captioning_restval/layers_representations/$FILENAME2"
-### COCOQA Captioning Restval Image
+# RESIDUAL_STREAM_ABS_PATH2="$REPRESENTATIONS_PATH/lmsys_vicuna-7b-v1.5/cocoqa_unified/layers_representations/$FILENAME2"
+### COCOQA Unified Image
 # FILENAME2="layer-all_token-last_pproj_img-qa_chat_gtxt_cfm_ds2500_s42.safetensors"
-# RESIDUAL_STREAM_ABS_PATH2="$REPRESENTATIONS_PATH/lmsys_vicuna-7b-v1.5/cocoqa_captioning_restval/layers_representations/$FILENAME2"
+# RESIDUAL_STREAM_ABS_PATH2="$REPRESENTATIONS_PATH/lmsys_vicuna-7b-v1.5/cocoqa_unified/layers_representations/$FILENAME2"
 
 FILENAME="analyze_residual_streams.py"
 FILEPATH="$PROJECT_DIR/scripts/$FILENAME"

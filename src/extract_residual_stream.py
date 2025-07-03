@@ -3,14 +3,15 @@ from typing import Optional, Dict, Any, Union, List
 import torch
 from tqdm import tqdm
 from PIL import Image
-from utils import format_prompts, resolve_layer_indices
+from utils import format_prompts, resolve_layer_indices, get_hidden_size
+import argparse
 
 
 def extract_residual_stream(
     model,
     processor,
     dataloader: DataLoader,
-    args: Optional[Dict[str, Any]] = None,
+    args: argparse.Namespace,
     text_model: Optional[bool] = False,
 ) -> Dict[str, Any]:
     """
@@ -24,7 +25,13 @@ def extract_residual_stream(
     Returns:
         A dictionary containing:
         - 'residual_stream_data': Either a tensor (for single layer) or
-                                  a dictionary mapping layer indices to tensors (for multiple layers)
+                                  a dictionary mapping layer indices to tensors (for multiple layers).
+                                  The tensor is of shape (num_samples, hidden_size).
+            {
+                "layer_0": tensor(num_samples, hidden_size),
+                "layer_1": tensor(num_samples, hidden_size),
+                ...
+            }
         - 'prompts': List of input prompts that were processed
     """
     # Input validation
@@ -34,7 +41,7 @@ def extract_residual_stream(
         )
 
     # Get model dimensions
-    hidden_size = _get_hidden_size(model)
+    hidden_size = get_hidden_size(model)
     num_samples = len(dataloader.dataset)
 
     print(f"Extracting residual streams for {num_samples} samples...")
@@ -64,12 +71,12 @@ def extract_residual_stream(
 
     # Process each batch
     for batch in dataloader:
-        questions_and_options = batch["questions"]
+        questions = batch["questions"]
         images = batch["images"]
 
         # Process each question in the batch
         full_prompts = format_prompts(
-            questions_and_options=questions_and_options,
+            questions=questions,
             images=images,
             args=args,
             processor=processor,
@@ -105,7 +112,7 @@ def extract_residual_stream(
                 progress_bar.update(update_every)
 
         del (
-            questions_and_options,
+            questions,
             images,
             full_prompts,
         )
@@ -128,37 +135,6 @@ def extract_residual_stream(
     return {"residual_stream_data": multi_layer_data, "prompts": prompts}
 
 
-def _get_hidden_size(model) -> int:
-    """
-    Retrieves the hidden dimension size from the model configuration.
-    Tries to access `config.hidden_size` and then `language_model.config.hidden_size`.
-
-    Args:
-        model: The model to inspect.
-
-    Returns:
-        int: The hidden size dimension.
-
-    Raises:
-        ValueError: If the hidden size cannot be determined.
-    """
-    hidden_size = getattr(getattr(model, "config", None), "hidden_size", None)
-    if hidden_size is not None:
-        return hidden_size
-
-    hidden_size = getattr(
-        getattr(getattr(model, "language_model", None), "config", None),
-        "hidden_size",
-        None,
-    )
-    if hidden_size is not None:
-        return hidden_size
-
-    raise ValueError(
-        "Could not determine model hidden size: No valid config.hidden_size found"
-    )
-
-
 def _process_sample_multi_layer(
     model,
     text_model,
@@ -166,8 +142,8 @@ def _process_sample_multi_layer(
     prompt: str,
     image: Union[Image.Image, None],
     layer_indices: List[int],
-    token_index: Optional[int],
-    mean_over_tokens: bool,
+    token_index: Optional[int] = None,
+    mean_over_tokens: bool = False,
 ) -> Dict[int, torch.Tensor]:
     """
     Processes a single text sample to extract hidden states from specified layers.
@@ -223,8 +199,8 @@ def _process_sample_multi_layer(
         if mean_over_tokens:
             processed_hidden_state = (
                 layer_hidden_state.mean(dim=0).detach().cpu().to(torch.float16)
-            )
-        else:
+            )  # (hidden_size,)
+        elif token_index is not None:
             seq_len = layer_hidden_state.shape[0]
             actual_token_index = None
             if token_index < 0:  # Convention for last token
@@ -243,7 +219,10 @@ def _process_sample_multi_layer(
                 )
             processed_hidden_state = (
                 layer_hidden_state[actual_token_index].detach().cpu().to(torch.float16)
-            )
+            )  # (hidden_size,)
+        else:
+            processed_hidden_state = layer_hidden_state.detach().cpu().to(torch.float16)
+            # (sequence_length, hidden_size)
 
         hidden_states_dict[layer_idx] = processed_hidden_state
 
