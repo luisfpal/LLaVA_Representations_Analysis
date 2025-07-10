@@ -189,7 +189,7 @@ class OpenVQADataset(Dataset):
         self.texts_qa = texts_qa
         # Random number generator for reproducibility and stable one-to-one
         # question-answer pair selection between images_qa and texts_qa datasets
-        self.rng = np.random.RandomState(seed)
+        self.rng = np.random.RandomState(seed=seed)
 
         dataset_dir = os.path.expanduser(dataset_path_or_name)
 
@@ -222,7 +222,9 @@ class OpenVQADataset(Dataset):
         dataset = dataset.sort("idx")
 
         self.dataset = dataset
-        self._seen_hashes = set()
+
+        # Pre-compute deterministic question-answer selection for each sample
+        self._precompute_qa_selection()
 
     def _hash_qa(self, qa_dict):
         """
@@ -235,6 +237,38 @@ class OpenVQADataset(Dataset):
         combined = f"{question}|||{answer}"
         return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
+    def _precompute_qa_selection(self):
+        """
+        Pre-compute which question-answer pair to use for each dataset sample.
+        This ensures deterministic behavior: same idx always returns same Q&A.
+        """
+        seen_hashes = set()
+        self._selected_qa_indices = {}
+
+        for sample_idx in range(len(self.dataset)):
+            question_data = self.dataset[sample_idx]
+            questions_and_answers = question_data["questions_and_answers"]
+
+            # Create deterministic shuffle based on dataset idx and seed
+            shuffled_indices = list(range(len(questions_and_answers)))
+            self.rng.shuffle(shuffled_indices)
+
+            # Find first unique Q&A pair
+            selected_idx = None
+            for shuffled_idx in shuffled_indices:
+                qa_dict = questions_and_answers[shuffled_idx]
+                hash_qa = self._hash_qa(qa_dict)
+                if hash_qa not in seen_hashes:
+                    seen_hashes.add(hash_qa)
+                    selected_idx = shuffled_idx
+                    break
+
+            # If no unique Q&A found, use first from shuffled list
+            if selected_idx is None:
+                selected_idx = shuffled_indices[0]
+
+            self._selected_qa_indices[sample_idx] = selected_idx
+
     def __len__(self) -> int:
         return len(self.dataset)
 
@@ -243,23 +277,9 @@ class OpenVQADataset(Dataset):
         question_data = self.dataset[idx]
         questions_and_answers = question_data["questions_and_answers"]
 
-        # Find a unique question-answer pair using shuffled indices
-        unique_qa_dict = None
-        shuffled_indices = list(range(len(questions_and_answers)))
-        self.rng.shuffle(shuffled_indices)
-        for idx in shuffled_indices:
-            qa_dict = questions_and_answers[idx]
-            hash_qa = self._hash_qa(qa_dict)
-            if hash_qa not in self._seen_hashes:
-                self._seen_hashes.add(hash_qa)
-                unique_qa_dict = qa_dict
-                break
-        # If no unique question-answer pair found, use the first one from shuffled list
-        if unique_qa_dict is None:
-            unique_qa_dict = questions_and_answers[shuffled_indices[0]]
-            # Despite the effort to make sure that the same (question, answer) pair is not repeated
-            # !Note: multiple images can have the shared (question, answer) pairs
-            # e.g., (what is the color of the car?, red) can be found in different images
+        # Use pre-computed selection for deterministic behavior
+        selected_qa_idx = self._selected_qa_indices[idx]
+        unique_qa_dict = questions_and_answers[selected_qa_idx]
 
         if self.texts_qa:
             captions = question_data.get("captions")
