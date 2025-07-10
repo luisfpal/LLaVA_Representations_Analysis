@@ -682,7 +682,7 @@ def residual_stream_tracer(
     processor: ProcessorType,
     dataloader: DataLoader,
     return_dtype: torch.dtype = torch.float16,
-    tokens_pooling_method: Optional[Literal["mean", "last"]] = "mean",
+    tokens_pooling_method: Optional[Literal["mean", "last", "none"]] = "mean",
     residual_stream_type: Literal[
         "output_layer", "post_mlp", "heads_projection"
     ] = "output_layer",
@@ -719,7 +719,7 @@ def residual_stream_tracer(
         processor (ProcessorType): processor to tokenize the inputs
         dataloader (DataLoader): dataloader to iterate over the dataset
         return_dtype (torch.dtype, optional): dtype of the residual stream. Defaults to torch.float16.
-        tokens_pooling_method (Optional[str], optional): method to pool the tokens. Defaults to "mean".
+        tokens_pooling_method (Optional[Literal["mean", "last", "none"]], optional): method to pool the tokens. Defaults to "mean".
         residual_stream_type (str, optional): type of the residual stream. Defaults to "output_layer".
         return_deepcopy (bool, optional): whether to return a deepcopy of the residual stream.
             Defaults to True, which deletes the tracer and intermediate variables.
@@ -761,6 +761,7 @@ def residual_stream_tracer(
     print("=" * 100)
 
     # Initialize the appropriate tracer based on residual_stream_type
+    tokens_pooling_method = None if tokens_pooling_method == "none" else tokens_pooling_method
     tracer_kwargs = {
         "model": model,
         "num_samples": dataset_size,

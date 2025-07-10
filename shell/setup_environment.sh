@@ -11,7 +11,7 @@ rm install_uv.sh
 
 # Install dependencies
 uv sync
-uv pip install flash-attn==2.5.7 --no-build-isolation
+# uv pip install flash-attn==2.5.7 --no-build-isolation
 
 # Activate the environment
 source .venv/bin/activate

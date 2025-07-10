@@ -1,73 +1,90 @@
+from jax import device_get
 import torch
-from typing import Optional, Tuple
-from .dataset import get_dataloader
+from typing import Optional, Tuple, Union
 from .model_utils import (
     replace_multimodal_projector,
     replace_multimodal_lm,
     load_hf_model_and_processor_or_tokenizer,
+    ModelType,
+    ProcessorType,
 )
-from .model_utils import ModelType, ProcessorType
-from torch.utils.data import DataLoader
 
 
-def setup_multimodal_extraction(
+def setup_multimodal_model(
     multimodal_model_name_or_path: str,
-    dataset_path_or_name: str,
     model_cache_dir: str,
-    dataset_cache_dir: Optional[str] = None,
-    batch_size: int = 1,
-    seed: int = 42,
     language_model_name_or_path: Optional[str] = None,
     pretrained_projector_name_or_path: Optional[str] = None,
     model_dtype: torch.dtype = torch.float16,
     attn_implementation: str = "flash_attention_2",
-    question_instruction_type: Optional[str] = None,
-    texts_qa: bool = False,
-    images_qa: bool = False,
-    split: Optional[str] = None,
-    downsample_size: Optional[int] = None,
     replace_language_model: bool = False,
     replace_pretrained_projector: bool = False,
-    guide_text: str = "",
-) -> Tuple[ModelType, ProcessorType, DataLoader]:
-    model, processor = load_hf_model_and_processor_or_tokenizer(
+    device_map: Union[str, dict] = "cuda:0",
+    skip_processor: bool = False,
+) -> Union[Tuple[ModelType, ProcessorType], ModelType]:
+    """
+    Sets up a HuggingFace-based multimodal model with optional projector and LM replacement.
+
+    Args:
+        multimodal_model_name_or_path: Path or name of the base multimodal model.
+        model_cache_dir: Directory for caching model weights.
+        language_model_name_or_path: Optional new language model path for replacement.
+        pretrained_projector_name_or_path: Optional path to pretrained projector to use.
+        model_dtype: Torch dtype to load the model with (default: torch.float16).
+        attn_implementation: Attention implementation type (default: "flash_attention_2").
+        replace_language_model: Whether to replace the internal LM.
+        replace_pretrained_projector: Whether to replace the projector module.
+        device_map: Device mapping (e.g. "cuda:0" or {"model": "cuda:0"}).
+        skip_processor: Whether to skip loading the processor/tokenizer.
+
+    Returns:
+        Tuple[ModelType, ProcessorType]: If skip_processor is False.
+        ModelType: If skip_processor is True.
+    """
+
+    # Validate input logic
+    if replace_language_model and not language_model_name_or_path:
+        raise ValueError(
+            "`language_model_name_or_path` must be provided if `replace_language_model` is True."
+        )
+
+    if replace_pretrained_projector and not pretrained_projector_name_or_path:
+        raise ValueError(
+            "`pretrained_projector_name_or_path` must be provided if `replace_pretrained_projector` is True."
+        )
+
+    # Build argument set
+    loader_args = dict(
         model_name_or_path=multimodal_model_name_or_path,
         cache_dir=model_cache_dir,
-        device_map="cuda:0",
+        device_map=device_map,
         dtype=model_dtype,
         attn_implementation=attn_implementation,
     )
 
-    if replace_pretrained_projector and pretrained_projector_name_or_path is not None:
+    if skip_processor:
+        loader_args["skip_processor"] = True
+
+    model_output = load_hf_model_and_processor_or_tokenizer(**loader_args)
+
+    if skip_processor:
+        model = model_output
+        processor = None
+    else:
+        model, processor = model_output
+
+    if replace_pretrained_projector:
         model = replace_multimodal_projector(
             multimodal_model=model,
             pretrained_projector_model_name_or_path=pretrained_projector_name_or_path,
             cache_dir=model_cache_dir,
         )
 
-    # Replace multimodal language model
-    if replace_language_model and language_model_name_or_path is not None:
+    if replace_language_model:
         model = replace_multimodal_lm(
             multimodal_model=model,
             replacement_lm_name_or_path=language_model_name_or_path,
             cache_dir=model_cache_dir,
         )
 
-    if not texts_qa and not images_qa:
-        raise ValueError("Either texts_qa or images_qa must be True")
-
-    dataloader = get_dataloader(
-        dataset_path_or_name=dataset_path_or_name,
-        cache_dir=dataset_cache_dir,
-        split=split,
-        texts_qa=texts_qa,
-        images_qa=images_qa,
-        question_instruction_type=question_instruction_type,
-        downsample_size=downsample_size,
-        seed=seed,
-        batch_size=batch_size,
-        processor=processor,
-        guide_text=guide_text,
-    )
-
-    return model, processor, dataloader
+    return model if skip_processor else (model, processor)

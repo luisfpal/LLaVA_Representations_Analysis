@@ -8,11 +8,33 @@ import gc
 import torch
 from src.residual_stream_tracer import residual_stream_tracer
 from utils import (
-    setup_multimodal_extraction,
+    setup_multimodal_model,
+    get_dataloader,
     compute_layers_residual_stream_entropy,
     seed_all,
 )
 
+MODEL_CACHE_DIR = "~/scratch/huggingface/hub"
+DATASET_CACHE_DIR = "~/scratch/huggingface/datasets"
+
+MULTIMODAL_EXTRACTION_ARGS = {
+    "multimodal_model_name_or_path": "llava-hf/llava-1.5-7b-hf",
+    "model_cache_dir": MODEL_CACHE_DIR,
+    "model_dtype": torch.float16,
+    "attn_implementation": "flash_attention_2",
+}
+
+DATALOADER_ARGS = {
+    "dataset_path_or_name": "~/scratch/datasets/cocoqa_unified",
+    "dataset_cache_dir": DATASET_CACHE_DIR, # not used here
+    "downsample_size": 2500,
+    "batch_size": 25,
+    "texts_qa": False,
+    "images_qa": True,
+    "guide_text": "Answer the question using a single word or phrase.\n",
+    "seed": 42,
+}
+    
 
 def print_heads_representations_info(
     representations: Union[torch.Tensor, Dict[str, torch.Tensor]],
@@ -29,26 +51,15 @@ def print_heads_representations_info(
             print(f"Shape of the representations for sample {idx}: {value.shape}")
 
 
-multimodal_extraction_args = {
-    "multimodal_model_name_or_path": "llava-hf/llava-1.5-7b-hf",
-    "model_cache_dir": "~/scratch/huggingface/hub",
-    "dataset_path_or_name": "~/scratch/datasets/cocoqa_unified",
-    "batch_size": 25,
-    "texts_qa": False,
-    "images_qa": True,
-    "downsample_size": 2500,
-    "guide_text": "Answer the question using a single word or phrase.\n",
-    "model_dtype": torch.float16,
-    "attn_implementation": "flash_attention_2",
-    "seed": 42,
-}
-
-
 def test_residual_stream_template(
     residual_stream_type: str, tokens_pooling_method: str, return_deepcopy: bool = True
 ):
-    model, processor, dataloader = setup_multimodal_extraction(
-        **multimodal_extraction_args,
+    model, processor = setup_multimodal_model(
+        **MULTIMODAL_EXTRACTION_ARGS,
+    )
+
+    dataloader = get_dataloader(
+        **DATALOADER_ARGS,
     )
 
     residual_stream = residual_stream_tracer(

@@ -10,7 +10,7 @@ from transformers import (
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
     AutoTokenizer,
-    # LlamaForCausalLM,
+    LlamaForCausalLM,
     # LlamaTokenizerFast
 )
 from huggingface_hub import snapshot_download
@@ -74,8 +74,8 @@ def load_hf_model_and_processor_or_tokenizer(
     attn_implementation: str = "flash_attention_2",
     low_cpu_mem_usage: bool = True,
     use_fast: bool = True,
-    not_model: bool = False,
-    not_processor: bool = False,
+    skip_model: bool = False,
+    skip_processor: bool = False,
 ) -> Union[
     ModelType,
     ProcessorType,
@@ -93,8 +93,8 @@ def load_hf_model_and_processor_or_tokenizer(
         attn_implementation (str): Attention implementation type.
         low_cpu_mem_usage (bool): Optimize for low CPU memory usage.
         use_fast (bool): Use the fast version of the processor if available.
-        not_model (bool): Whether to not load the model.
-        not_processor (bool): Whether to not load the processor.
+        skip_model (bool): Whether to not load the model.
+        skip_processor (bool): Whether to not load the processor.
 
     Returns:
         The loaded model and processor/tokenizer or just the model or the processor.
@@ -105,7 +105,7 @@ def load_hf_model_and_processor_or_tokenizer(
     """
     cache_dir = os.path.expanduser(cache_dir)
 
-    if not_model and not_processor:
+    if skip_model and skip_processor:
         raise ValueError("Cannot not load both the model and the processor.")
 
     try:
@@ -130,7 +130,7 @@ def load_hf_model_and_processor_or_tokenizer(
         "torch_dtype": dtype,
     }
 
-    if not not_processor:
+    if not skip_processor:
         try:
             print(f"\nLoading {model_name_or_path} processor...")
             processor = ProcessorClass.from_pretrained(
@@ -148,7 +148,7 @@ def load_hf_model_and_processor_or_tokenizer(
                 f"{('processor' if not text_model else 'tokenizer')} "
                 f"for {model_name_or_path} from cache {cache_dir}. Error: {e}"
             )
-    if not not_model:
+    if not skip_model:
         try:
             print(f"\nLoading {model_name_or_path} model...")
             model = ModelClass.from_pretrained(**model_kwargs)
@@ -157,9 +157,9 @@ def load_hf_model_and_processor_or_tokenizer(
                 f"Failed to load model for '{model_name_or_path}' from cache '{cache_dir}'. Error: {e}"
             )
 
-    if not_model:
+    if skip_model:
         return processor
-    elif not_processor:
+    elif skip_processor:
         return model
 
     return model, processor
@@ -227,7 +227,7 @@ def replace_multimodal_lm(
         dtype=torch.float16,
         attn_implementation="flash_attention_2",
         low_cpu_mem_usage=True,
-        not_processor=True,
+        skip_processor=True,
     )
 
     # Check if the type of the replacement model is compatible

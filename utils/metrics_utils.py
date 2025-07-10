@@ -813,3 +813,124 @@ def compute_layers_residual_stream_entropy(
         )  # shape: (num_layers,)
     else:
         raise ValueError(f"Invalid entropy type: {entropy_type}")
+
+
+def compute_layers_residual_stream_similarities(
+    residual_stream_network1: torch.Tensor,
+    residual_stream_network2: torch.Tensor,
+    similarity_measures: List[str],
+    **kwargs,
+) -> Dict[str, torch.Tensor]:
+    """
+    Compute measures of the residual stream of two networks.
+
+    Args:
+        residual_stream_network1: Tensor of shape (num_layers, num_samples, hidden_size)
+        residual_stream_network2: Tensor of shape (num_layers, num_samples, hidden_size)
+        similarity_measures:
+            - neighborhood_overlap
+            - linear_cka
+            - svcca
+        **kwargs:
+            - maxk: int = 30 for neighborhood_overlap
+            - accept_rate: float = 0.95 for svcca
+
+    Returns:
+        Dict of tensors of measures of the residual stream of shape (num_layers,)
+    """
+    num_layers, num_samples, _ = residual_stream_network1.shape
+    num_layers_2, num_samples_2, _ = residual_stream_network2.shape
+    if num_layers != num_layers_2 or num_samples != num_samples_2:
+        raise ValueError(
+            "The number of layers and samples of the two networks must be the same"
+        )
+    residual_stream_measures = {}
+    for measure in similarity_measures:
+        residual_stream_measures[measure] = torch.zeros(num_layers, dtype=torch.float64)
+        for layer in range(num_layers):
+            residual_stream_measures[measure][layer] = compute_similarity(
+                residual_stream_network1[layer],
+                residual_stream_network2[layer],
+                measure,
+                **kwargs,
+            )
+    return residual_stream_measures
+
+
+def compute_layers_intrinsic_dimension(
+    residual_stream: torch.Tensor,
+    algorithm: str = "scaling_grid",
+    **kwargs,
+) -> torch.Tensor:
+    """
+    Compute intrinsic dimension of the residual stream.
+    """
+    num_layers = residual_stream.shape[0]
+    intrinsic_dimension = torch.zeros(num_layers, dtype=torch.float64)
+    for layer in range(num_layers):
+        intrinsic_dimension[layer] = compute_intrinsic_dimension(
+            residual_stream[layer], algorithm=algorithm, **kwargs
+        )
+    return intrinsic_dimension
+
+
+def compute_heads_projection_residual_stream_similarities(
+    residual_stream_network1: torch.Tensor,
+    residual_stream_network2: torch.Tensor,
+    similarity_measures: List[str],
+    **kwargs,
+) -> Dict[str, torch.Tensor]:
+    """odel_name, model_args in MODELS.items():
+                model, processor = setup_multimodal_model(
+
+    Compute measures of the heads projection residual stream of two networks.
+
+    Args:
+        residual_stream_network1: Tensor of shape (num_layers, num_samples, num_heads, hidden_size)
+        residual_stream_network2: Tensor of shape (num_layers, num_samples, num_heads, hidden_size)
+        similarity_measures:
+            - neighborhood_overlap
+            - linear_cka
+            - svcca
+        **kwargs:
+            - maxk: int = 30 for neighborhood_overlap
+            - accept_rate: float = 0.95 for svcca
+
+    Returns:
+        Dict of tensors of measures of the heads projection residual stream of shape (num_layers, num_heads)
+    """
+    num_layers, num_samples, num_heads, _ = residual_stream_network1.shape
+    num_layers_2, num_samples_2, num_heads_2, _ = residual_stream_network2.shape
+    if (
+        num_layers != num_layers_2
+        or num_samples != num_samples_2
+        or num_heads != num_heads_2
+    ):
+        raise ValueError(
+            "The number of layers, samples and heads of the two networks must be the same"
+        )
+    residual_stream_measures = {}
+    for measure in similarity_measures:
+        residual_stream_measures[measure] = torch.zeros(
+            num_layers, num_heads, dtype=torch.float64
+        )
+
+    for head_idx in range(num_heads):
+        # todo: consider if the operations are cache-efficient
+        X = residual_stream_network1[
+            :, :, head_idx, :
+        ]  # (num_layers, num_samples, hidden_size)
+        Y = residual_stream_network2[
+            :, :, head_idx, :
+        ]  # (num_layers, num_samples, hidden_size)
+        residual_stream_measures_layers = compute_layers_residual_stream_similarities(
+            X,
+            Y,
+            similarity_measures=similarity_measures,
+            **kwargs,
+        )
+        for measure in similarity_measures:
+            residual_stream_measures[measure][:, head_idx] = (
+                residual_stream_measures_layers[measure]
+            )
+    return residual_stream_measures

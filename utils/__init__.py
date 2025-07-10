@@ -44,7 +44,12 @@ from .naming_utils import (
     create_filename_from_paths,
 )
 from .operations_utils import seed_all, sample_unique_row_indices
-from .multimodal_extraction_setup import setup_multimodal_extraction
+from .multimodal_extraction_setup import setup_multimodal_model
+from .benchmarking_utils import (
+    parse_predicted_answer,
+    benchmark_model_vqa_processed_dataloader,
+)
+from .layers_weights_transplantation import transplant_layers_weights
 
 __all__ = [
     "parse_layer_index",
@@ -80,5 +85,8 @@ __all__ = [
     "create_filename_from_paths",
     "seed_all",
     "sample_unique_row_indices",
-    "setup_multimodal_extraction",
+    "setup_multimodal_model",
+    "parse_predicted_answer",
+    "benchmark_model_vqa_processed_dataloader",
+    "transplant_layers_weights",
 ]
