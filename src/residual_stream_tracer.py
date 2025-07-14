@@ -680,7 +680,7 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
 def residual_stream_tracer(
     model: ModelType,
     processor: ProcessorType,
-    dataloader: DataLoader,
+    processed_dataloader: DataLoader,
     return_dtype: torch.dtype = torch.float16,
     tokens_pooling_method: Optional[Literal["mean", "last", "none"]] = "mean",
     residual_stream_type: Literal[
@@ -717,7 +717,7 @@ def residual_stream_tracer(
     Args:
         model (ModelType): huggingface multimodal decoder-based model
         processor (ProcessorType): processor to tokenize the inputs
-        dataloader (DataLoader): dataloader to iterate over the dataset
+        processed_dataloader (DataLoader): processed dataloader to iterate over the dataset
         return_dtype (torch.dtype, optional): dtype of the residual stream. Defaults to torch.float16.
         tokens_pooling_method (Optional[Literal["mean", "last", "none"]], optional): method to pool the tokens. Defaults to "mean".
         residual_stream_type (str, optional): type of the residual stream. Defaults to "output_layer".
@@ -730,8 +730,11 @@ def residual_stream_tracer(
 
     Raises:
         ValueError: If residual_stream_type or tokens_pooling_method are invalid
-        ValueError: If dataloader is empty
+        ValueError: If processed_dataloader is empty
     """
+
+    # todo: consider modifying to allow pass a raw dataloader and a processed dataloader
+
     # Parameter validation
     if residual_stream_type not in VALID_RESIDUAL_STREAM_TYPES:
         raise ValueError(
@@ -746,8 +749,8 @@ def residual_stream_tracer(
         )
 
     # Extract dataset info with validation
-    batch_size = dataloader.batch_size
-    dataset_size = len(dataloader.dataset)
+    batch_size = processed_dataloader.batch_size
+    dataset_size = len(processed_dataloader.dataset)
 
     if dataset_size == 0:
         raise ValueError(
@@ -761,7 +764,9 @@ def residual_stream_tracer(
     print("=" * 100)
 
     # Initialize the appropriate tracer based on residual_stream_type
-    tokens_pooling_method = None if tokens_pooling_method == "none" else tokens_pooling_method
+    tokens_pooling_method = (
+        None if tokens_pooling_method == "none" else tokens_pooling_method
+    )
     tracer_kwargs = {
         "model": model,
         "num_samples": dataset_size,
@@ -799,7 +804,7 @@ def residual_stream_tracer(
     start_time = time.time()
 
     # Process batches
-    for batch in dataloader:
+    for batch in processed_dataloader:
         batch = batch.to(model.device)
         current_batch_size = batch.attention_mask.shape[0]
         tracer.trace_batch(batch)

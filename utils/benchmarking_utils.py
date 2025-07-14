@@ -56,20 +56,20 @@ def parse_predicted_answer(predicted_text: str, answer: str) -> str:
 
 def benchmark_model_vqa_processed_dataloader(
     model: ModelType,
-    dataloader: DataLoader,
+    processed_dataloader: DataLoader,
     processor: ProcessorType,
     max_new_tokens: int = 1,
 ) -> Dict[str, float]:
     correct_answers = 0
     incorrect_answers = 0
 
-    dataset_size = len(dataloader)
+    dataset_size = len(processed_dataloader)
     progress_bar = tqdm(total=dataset_size, desc="Processing samples", unit="sample")
     update_count = 0
     update_every = max(1, int(0.1 * dataset_size))
     samples_processed = 0
 
-    for batch, answer_letters in dataloader:
+    for batch, answer_letters in processed_dataloader:
         current_batch_size, input_ids_length = batch.input_ids.shape[:2]
         with torch.no_grad():
             kwargs_for_generate = {

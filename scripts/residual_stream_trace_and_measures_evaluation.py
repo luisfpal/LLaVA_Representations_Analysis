@@ -2,15 +2,14 @@ import torch
 import argparse
 import os
 import gc
+import time
 from safetensors.torch import save_file
-from typing import Union
+from typing import Union, List
 from src.residual_stream_tracer import residual_stream_tracer
 from utils import (
     setup_multimodal_model,
     get_dataloader,
     seed_all,
-)
-from utils.metrics_utils import (
     compute_layers_residual_stream_similarities,
     compute_heads_projection_residual_stream_similarities,
     compute_layers_intrinsic_dimension,
@@ -23,17 +22,18 @@ ATTN_IMPLEMENTATION = (
     "flash_attention_2"  # should be changed to "sdpa" for torch.float32
 )
 
-
+# Valid residual stream extraction types
 RESIDUAL_STREAM_TYPE: set[str] = {
     "output_layer",
     "post_mlp",
     "heads_projection",
 }
 
-TOKENS_POOLING_METHOD: set[Union[str, None]] = {
+# Valid token pooling methods
+TOKENS_POOLING_METHOD: set[Union[str]] = {
     "mean",
     "last",
-    None,
+    "none",  # Note: "none" gets converted to None internally
 }
 
 COCOQA_DATASET_ARGS = {
@@ -65,117 +65,277 @@ MODELS = {
     },
 }
 
+MODELS_SIMILARITIES_NAME = "llava-1.5-7b-hf_vs_vicuna-7b-v1.5"
+
+
+def parse_list_argument(arg_value: str, valid_values: set) -> List[str]:
+    """
+    Parse comma-separated string argument and validate against valid values.
+
+    Args:
+        arg_value: Comma-separated string of values
+        valid_values: Set of valid values to validate against
+
+    Returns:
+        List of validated values
+
+    Raises:
+        ValueError: If any value is not in valid_values
+    """
+    if not arg_value:
+        return list(valid_values)
+
+    values = [v.strip() for v in arg_value.split(",")]
+    invalid_values = set(values) - valid_values
+
+    if invalid_values:
+        raise ValueError(
+            f"Invalid values: {invalid_values}. Valid values are: {valid_values}"
+        )
+
+    return values
+
+
+def validate_combination(residual_stream_type: str, tokens_pooling_method: str) -> bool:
+    """
+    Validate if a combination of residual stream type and tokens pooling method is valid.
+
+    Args:
+        residual_stream_type: Type of residual stream extraction
+        tokens_pooling_method: Method for pooling tokens
+
+    Returns:
+        True if combination is valid, False otherwise
+    """
+    # These combinations are not supported due to memory constraints
+    if (
+        residual_stream_type in ["heads_projection", "post_mlp"]
+        and tokens_pooling_method == "none"
+    ):
+        return False
+    return True
+
+
+def get_model_identifier(model_args: dict) -> str:
+    """
+    Generate a standardized model identifier from model arguments.
+
+    Args:
+        model_args: Dictionary containing model configuration
+
+    Returns:
+        String identifier for the model
+    """
+    mm_model_name = model_args["model_name_or_path"].split("/")[-1]
+
+    language_model_path = model_args.get("language_model_name_or_path")
+    pretrained_projector_path = model_args.get("pretrained_projector_name_or_path")
+    if language_model_path and pretrained_projector_path:
+        pp_model_name = pretrained_projector_path.split("/")[-1]
+        return pp_model_name
+    else:
+        return mm_model_name
+
 
 def main():
     """
-    Organize the results in the following format in the results directory of the root of the project:
-    - results/
-        - dataset_name/
-            - similarities/
-                - llava-1.5-7b-hf_vs_vicuna-7b-v1.5_<tokens_pooling_method>_<residual_stream_type>.safetensors
-            - models_data_measures/
-                - model_name/
-                    - dataset_entropy_<tokens_pooling_method>_<residual_stream_type>.safetensors
-                    - id_<id_nn_rank>_<id_nn_range_max>_<tokens_pooling_method>_<residual_stream_type>.safetensors
-                    - prompt_entropy_<tokens_pooling_method>_<residual_stream_type>.safetensors
-                    - dataset_entropy_<tokens_pooling_method>_<residual_stream_type>.safetensors
-    TODO:
-        - I must parse a list of the residual stream types to be extracted from the set RESIDUAL_STREAM_TYPE
-        - The same for the tokens pooling methods so that I can select the combinations of residual stream types and tokens pooling methods to be extracted
+    Extract residual streams from multimodal models and computes similarity
+    measures and data measures.
+
+    This script performs analysis of neural network representations by:
+    1. Extracting residual streams at different model locations (output_layer, post_mlp, heads_projection)
+    2. Computing intrinsic dimension and entropy measures
+    3. Calculating similarity measures between different model configurations
+
+    Results are organized in the following directory structure:
+    results/
+    ├── dataset_name/
+    │   ├── similarities/
+    │   │   └── model1_vs_model2_<pooling>_<stream_type>.safetensors
+    │   └── models_data_measures/
+    │       └── model_name/
+    │           ├── dataset_entropy_<pooling>_<stream_type>.safetensors
+    │           ├── id_<rank>_<range>_<pooling>_<stream_type>.safetensors
+    │           └── prompt_entropy_<pooling>_<stream_type>.safetensors
+
+    Command-line arguments allow selection of specific residual stream types and
+    token pooling methods to control which analyses are performed.
     """
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Extract and analyze residual streams from multimodal models",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    # Required arguments
     parser.add_argument("--result-parent-dir", type=str, required=True)
+    parser.add_argument("--dataset-name-or-path", type=str, required=True)
     parser.add_argument("--model-cache-dir", type=str, required=True)
-    parser.add_argument("--dataset-name-or-path", type=str, default=None)
+    parser.add_argument("--batch-size", type=int, default=1)
+
+    # Analysis configuration
+    parser.add_argument(
+        "--residual-stream-types",
+        type=str,
+        default=None,
+        help=f"Comma-separated list of residual stream types to extract. "
+        f"Valid options: {', '.join(sorted(RESIDUAL_STREAM_TYPE))}. "
+        f"If not specified, all types will be processed.",
+    )
+    parser.add_argument(
+        "--tokens-pooling-methods",
+        type=str,
+        default=None,
+        help=f"Comma-separated list of token pooling methods. "
+        f"Valid options: {', '.join(sorted(TOKENS_POOLING_METHOD))}. "
+        f"If not specified, all methods will be processed.",
+    )
+
+    # Similarity measure parameters
     parser.add_argument("--maxk", type=int, default=30)
     parser.add_argument("--accept-rate", type=float, default=0.95)
-    parser.add_argument("--seed", type=int, default=42)
+
+    # Intrinsic dimension parameters
     parser.add_argument("--id-nn-rank", type=int, default=16)
     parser.add_argument("--id-nn-range-max", type=int, default=100)
+
+    # Reproducibility
+    parser.add_argument("--seed", type=int, default=42)
+
     args = parser.parse_args()
 
+    # Validate and parse arguments
+    try:
+        residual_stream_types = parse_list_argument(
+            args.residual_stream_types, RESIDUAL_STREAM_TYPE
+        )
+        tokens_pooling_methods = parse_list_argument(
+            args.tokens_pooling_methods, TOKENS_POOLING_METHOD
+        )
+    except ValueError as e:
+        parser.error(f"Argument parsing error: {e}")
+
+    # Validate argument ranges
+    if not (0.0 < args.accept_rate <= 1.0):
+        parser.error("accept-rate must be between 0 and 1")
+    if args.maxk <= 0:
+        parser.error("maxk must be positive")
+    if args.id_nn_rank <= 0:
+        parser.error("id-nn-rank must be positive")
+    if args.id_nn_range_max <= 0:
+        parser.error("id-nn-range-max must be positive")
+
+    # Set random seed for reproducibility
     seed_all(args.seed)
     base_dir = os.path.expanduser(args.result_parent_dir)
-    # parse a list of residual stream types
-    return_deepcopy = True
-    for residual_stream_type in RESIDUAL_STREAM_TYPE:
-        for tokens_pooling_method in TOKENS_POOLING_METHOD:
-            if tokens_pooling_method == "none":
-                return_deepcopy = False
-            if (
-                residual_stream_type == "heads_projection"
-                and tokens_pooling_method == "none"
-            ):
-                continue
-            if residual_stream_type == "post_mlp" and tokens_pooling_method == "none":
-                continue
-            for dataset_name, dataset_args in DATASETS.items():
-                dataloader = get_dataloader(
-                    **{
-                        **dataset_args,
-                        "dataset_name_or_path": args.dataset_name_or_path,
-                    }
+
+    print(
+        f"Processing {len(residual_stream_types)} residual stream types: {residual_stream_types}"
+    )
+    print(
+        f"Processing {len(tokens_pooling_methods)} token pooling methods: {tokens_pooling_methods}"
+    )
+
+    # Process each combination of residual stream type and token pooling method
+    for residual_stream_type in residual_stream_types:
+        for tokens_pooling_method in tokens_pooling_methods:
+            # Validate combination feasibility
+            if not validate_combination(residual_stream_type, tokens_pooling_method):
+                print(
+                    f"Skipping invalid combination: {residual_stream_type} + {tokens_pooling_method}"
                 )
+                continue
+
+            print(f"\n{'=' * 100}")
+            print(
+                f"Processing: {residual_stream_type} residual stream type with {tokens_pooling_method} pooling method"
+            )
+            print(f"{'=' * 100}")
+
+            start_time = time.time()
+
+            # Convert "none" string to None for internal processing
+            pooling_method = (
+                None if tokens_pooling_method == "none" else tokens_pooling_method
+            )
+
+            # Determine if we need deep copy (only False for "none" pooling to save memory)
+            return_deepcopy = tokens_pooling_method != "none"
+
+            for dataset_name, dataset_args in DATASETS.items():
+                print(f"\nProcessing dataset: {dataset_name}")
+                # the dataloader is loaded inside the models loop
+                # because the residual stream tracer uses a processed dataloader
+                # todo: redesign the interface if used in the future
+
+                # Initialize storage for model residual streams
                 residual_stream_multimodal_model = None
                 residual_stream_multimodal_model_pretrained_connector = None
-                # shapes: (num_layers, num_samples, num_heads, hidden_size)
-                # or (num_layers, num_samples, hidden_size)
-                common_dir = os.path.join(
-                    base_dir,
-                    "results",
-                    dataset_name,
-                )
+
+                # Set up output directories
+                common_dir = os.path.join(base_dir, "results", dataset_name)
                 similarities_dir = os.path.join(common_dir, "similarities")
-                os.makedirs(similarities_dir, exist_ok=True)
                 models_data_measures_dir = os.path.join(
                     common_dir, "models_data_measures"
                 )
+
+                os.makedirs(similarities_dir, exist_ok=True)
                 os.makedirs(models_data_measures_dir, exist_ok=True)
 
-                for model_name, model_args in MODELS.items():
-                    mm_model_name = (
-                        model_args["model_name_or_path"]
-                        .split("/")[-1]
-                        .replace("-", "_")
-                    )
-                    lm_model_name = (
-                        model_args.get("language_model_name_or_path", None)
-                        .split("/")[-1]
-                        .replace("-", "_")
-                    )
-                    if lm_model_name is None:
-                        lm_model_name = mm_model_name
-                    model_name = f"{mm_model_name}_vs_{lm_model_name}"
+                # Process each model configuration
+                for model_key, model_args in MODELS.items():
+                    print(f"  Processing model: {model_key}")
 
-                    model_dir = os.path.join(models_data_measures_dir, model_name)
+                    # Generate model identifier and create output directory
+                    model_identifier = get_model_identifier(model_args)
+                    model_dir = os.path.join(models_data_measures_dir, model_identifier)
                     os.makedirs(model_dir, exist_ok=True)
 
+                    # Load model and processor
                     model, processor = setup_multimodal_model(
                         **{
                             **model_args,
                             "model_cache_dir": args.model_cache_dir,
                         }
                     )
+
+                    # Get dataloader for current dataset
+                    # !this is the same dataloader for the models in the loop
+                    # this is a minimal overhead since here it doesn't consume much memory nor time
+                    # !not so neat but it works for now
+                    # todo: redesign the interface if used in the future
+                    processed_dataloader = get_dataloader(
+                        **{
+                            **dataset_args,
+                            "dataset_name_or_path": args.dataset_name_or_path,
+                            "seed": args.seed,
+                            "processor": processor,
+                            "batch_size": args.batch_size,
+                        }
+                    )
+
+                    # Extract residual stream
                     residual_stream = residual_stream_tracer(
                         model=model,
                         processor=processor,
-                        dataloader=dataloader,
+                        processed_dataloader=processed_dataloader,
                         residual_stream_type=residual_stream_type,
-                        tokens_pooling_method=tokens_pooling_method,
+                        tokens_pooling_method=pooling_method,
                         return_deepcopy=return_deepcopy,
                     )
-                    if model_name == "multimodal_model":
+
+                    # Store residual streams for similarity computation
+                    if model_key == "multimodal_model":
                         residual_stream_multimodal_model = residual_stream
-                    elif model_name == "multimodal_model_pretrained_connector":
+                    elif model_key == "multimodal_model_pretrained_connector":
                         residual_stream_multimodal_model_pretrained_connector = (
                             residual_stream
                         )
 
-                    if (
-                        residual_stream_type == "output_layer"
-                        or residual_stream_type == "post_mlp"
-                    ):
-                        if tokens_pooling_method is not None:
+                    # Compute intrinsic dimension and entropy measures for layer-wise extractions
+                    if residual_stream_type in ["output_layer", "post_mlp"]:
+                        if pooling_method is not None:
+                            # Compute intrinsic dimension (only for pooled data)
+                            print("    Computing intrinsic dimension...")
                             layers_intrinsic_dimension = (
                                 compute_layers_intrinsic_dimension(
                                     residual_stream,
@@ -193,6 +353,9 @@ def main():
                                     f"id_{args.id_nn_rank}_{args.id_nn_range_max}_{tokens_pooling_method}_{residual_stream_type}.safetensors",
                                 ),
                             )
+
+                            # Compute dataset entropy (only for pooled data)
+                            print("    Computing dataset entropy...")
                             layers_dataset_entropy = (
                                 compute_layers_residual_stream_entropy(
                                     residual_stream,
@@ -207,6 +370,8 @@ def main():
                                 ),
                             )
                         else:
+                            # Compute prompt entropy (only for non-pooled data)
+                            print("    Computing prompt entropy...")
                             layers_prompt_entropy = (
                                 compute_layers_residual_stream_entropy(
                                     residual_stream,
@@ -221,10 +386,13 @@ def main():
                                 ),
                             )
 
+                    # Clean up model from memory
                     del model, processor
                     gc.collect()
                     torch.cuda.empty_cache()
 
+                # Compute similarity measures between models
+                print("  Computing similarity measures...")
                 if residual_stream_type == "heads_projection":
                     compute_residual_stream_similarities = (
                         compute_heads_projection_residual_stream_similarities
@@ -241,21 +409,33 @@ def main():
                     maxk=args.maxk,
                     accept_rate=args.accept_rate,
                 )
+
+                # Save similarity results
                 save_file(
                     residual_stream_similarities,
                     os.path.join(
                         similarities_dir,
-                        f"llava-1.5-7b-hf_vs_vicuna-7b-v1.5_{tokens_pooling_method}_{residual_stream_type}.safetensors",
+                        f"{MODELS_SIMILARITIES_NAME}_{tokens_pooling_method}_{residual_stream_type}.safetensors",
                     ),
                 )
 
+                # Clean up residual streams from memory
                 del (
-                    dataloader,
                     residual_stream_multimodal_model,
                     residual_stream_multimodal_model_pretrained_connector,
                 )
                 gc.collect()
                 torch.cuda.empty_cache()
+
+            end_time = time.time()
+            print(
+                f"Combination {residual_stream_type} + {tokens_pooling_method} completed in {(end_time - start_time) / 60:.2f} minutes"
+            )
+
+    print(f"\n{'=' * 100}")
+    print("Analysis completed successfully!")
+    print(f"Results saved to: {base_dir}/results/")
+    print(f"{'=' * 100}")
 
 
 if __name__ == "__main__":

@@ -27,6 +27,9 @@ from .metrics_utils import (
     compute_intrinsic_dimension,
     compute_matrix_based_renyi_entropy,
     compute_layers_residual_stream_entropy,
+    compute_layers_residual_stream_similarities,
+    compute_heads_projection_residual_stream_similarities,
+    compute_layers_intrinsic_dimension,
 )
 from .model_utils import (
     load_hf_model_and_processor_or_tokenizer,
@@ -72,6 +75,9 @@ __all__ = [
     "compute_intrinsic_dimension",
     "compute_matrix_based_renyi_entropy",
     "compute_layers_residual_stream_entropy",
+    "compute_layers_residual_stream_similarities",
+    "compute_heads_projection_residual_stream_similarities",
+    "compute_layers_intrinsic_dimension",
     "load_hf_model_and_processor_or_tokenizer",
     "resolve_layer_indices",
     "replace_multimodal_lm",

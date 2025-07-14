@@ -26,7 +26,7 @@ MULTIMODAL_EXTRACTION_ARGS = {
 
 DATALOADER_ARGS = {
     "dataset_path_or_name": "~/scratch/datasets/cocoqa_unified",
-    "dataset_cache_dir": DATASET_CACHE_DIR, # not used here
+    "dataset_cache_dir": DATASET_CACHE_DIR,  # not used here
     "downsample_size": 2500,
     "batch_size": 25,
     "texts_qa": False,
@@ -34,7 +34,7 @@ DATALOADER_ARGS = {
     "guide_text": "Answer the question using a single word or phrase.\n",
     "seed": 42,
 }
-    
+
 
 def print_heads_representations_info(
     representations: Union[torch.Tensor, Dict[str, torch.Tensor]],
@@ -60,12 +60,13 @@ def test_residual_stream_template(
 
     dataloader = get_dataloader(
         **DATALOADER_ARGS,
+        processor=processor,
     )
 
     residual_stream = residual_stream_tracer(
         model=model,
         processor=processor,
-        dataloader=dataloader,
+        processed_dataloader=dataloader,
         residual_stream_type=residual_stream_type,
         tokens_pooling_method=tokens_pooling_method,
         return_deepcopy=return_deepcopy,

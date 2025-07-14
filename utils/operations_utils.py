@@ -1,5 +1,6 @@
-import torch
+import random
 import numpy as np
+import torch
 from typing import Union
 
 
@@ -10,8 +11,6 @@ def seed_all(seed: int):
     Args:
         seed (int): The seed value to set.
     """
-    import random
-    import numpy as np
 
     random.seed(seed)
     np.random.seed(seed)

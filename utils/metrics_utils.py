@@ -880,9 +880,7 @@ def compute_heads_projection_residual_stream_similarities(
     similarity_measures: List[str],
     **kwargs,
 ) -> Dict[str, torch.Tensor]:
-    """odel_name, model_args in MODELS.items():
-                model, processor = setup_multimodal_model(
-
+    """
     Compute measures of the heads projection residual stream of two networks.
 
     Args:
@@ -916,7 +914,6 @@ def compute_heads_projection_residual_stream_similarities(
         )
 
     for head_idx in range(num_heads):
-        # todo: consider if the operations are cache-efficient
         X = residual_stream_network1[
             :, :, head_idx, :
         ]  # (num_layers, num_samples, hidden_size)
