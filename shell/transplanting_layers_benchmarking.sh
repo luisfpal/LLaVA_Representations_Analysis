@@ -7,14 +7,14 @@ LANGUAGE_MODEL_NAME_OR_PATH="lmsys/vicuna-7b-v1.5"
 PRETRAINED_PROJECTOR_NAME_OR_PATH="liuhaotian/llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5"
 
 # Dataset configuration
-DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_unified"
+DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
 # Transplantation configuration
-TRANSPLANTATION_METHOD="sliding_window"
-# TRANSPLANTATION_METHOD="two_parts"
+# TRANSPLANTATION_METHOD="sliding_window"
+TRANSPLANTATION_METHOD="two_parts"
 
 # Benchmarking parameters
-BATCH_SIZE="25"
+BATCH_SIZE="10"
 MAX_NEW_TOKENS="10"
 SEED="42"
 
@@ -37,7 +37,7 @@ SCRIPT_ARGS+=(--transplantation_method "$TRANSPLANTATION_METHOD")
 SCRIPT_ARGS+=(--batch_size "$BATCH_SIZE")
 SCRIPT_ARGS+=(--max_new_tokens "$MAX_NEW_TOKENS")
 SCRIPT_ARGS+=(--results_dir "$RESULTS_DIR")
-SCRIPT_ARGS+=(--dataset_name_or_path "$DATASET_NAME_OR_PATH")
+SCRIPT_ARGS+=(--dataset_path_or_name "$DATASET_PATH_OR_NAME")
 SCRIPT_ARGS+=(--seed "$SEED")
 
 # --- Debugger ---
@@ -55,7 +55,7 @@ echo "====== Transplanting Layers Benchmarking Configuration ======"
 echo "Multimodal model: $MULTIMODAL_MODEL_NAME_OR_PATH"
 echo "Language model: $LANGUAGE_MODEL_NAME_OR_PATH"
 echo "Pretrained projector: $PRETRAINED_PROJECTOR_NAME_OR_PATH"
-echo "Dataset: $DATASET_NAME_OR_PATH"
+echo "Dataset: $DATASET_PATH_OR_NAME"
 echo "Transplantation method: $TRANSPLANTATION_METHOD"
 echo "Results directory: $RESULTS_DIR"
 echo "Model cache directory: $MODEL_CACHE_DIR"

@@ -87,4 +87,5 @@ def setup_multimodal_model(
             cache_dir=model_cache_dir,
         )
 
+    model.to(device_map)
     return model if skip_processor else (model, processor)

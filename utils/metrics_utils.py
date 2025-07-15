@@ -496,6 +496,8 @@ def compute_intrinsic_dimension(
         return MLE(X, k, full_output).item()
     elif algorithm == "scaling_gride":
         return id_scaling_gride(X, k, range_max).item()
+    else:
+        raise ValueError(f"Unknown algorithm: {algorithm}")
 
 
 # https://github.com/lorenzobasile/IDCorrelation/blob/main/utils/intrinsic_dimension.py
@@ -767,7 +769,7 @@ def compute_prompt_entropy_sequential(
     num_layers = samples[0].shape[0]
     layers_entropies = torch.zeros(num_samples, num_layers, dtype=torch.float64)
 
-    update_every = max(1, int(0.05 * num_samples))  # Update every 5%
+    update_every = max(1, int(0.1 * num_samples))  # Update every 10%
     progress_bar = tqdm(total=num_samples, desc="Processing samples", unit="sample")
     last_update = 0
 
@@ -859,7 +861,7 @@ def compute_layers_residual_stream_similarities(
 
 def compute_layers_intrinsic_dimension(
     residual_stream: torch.Tensor,
-    algorithm: str = "scaling_grid",
+    algorithm: str = "scaling_gride",
     **kwargs,
 ) -> torch.Tensor:
     """
@@ -868,9 +870,10 @@ def compute_layers_intrinsic_dimension(
     num_layers = residual_stream.shape[0]
     intrinsic_dimension = torch.zeros(num_layers, dtype=torch.float64)
     for layer in range(num_layers):
-        intrinsic_dimension[layer] = compute_intrinsic_dimension(
+        id_layer = compute_intrinsic_dimension(
             residual_stream[layer], algorithm=algorithm, **kwargs
         )
+        intrinsic_dimension[layer] = id_layer
     return intrinsic_dimension
 
 
@@ -913,6 +916,12 @@ def compute_heads_projection_residual_stream_similarities(
             num_layers, num_heads, dtype=torch.float64
         )
 
+    update_every = max(1, int(0.1 * num_heads))  # Update every 10%
+    progress_bar = tqdm(
+        total=num_heads, desc="Processing heads similarities", unit="head"
+    )
+    last_update = 0
+
     for head_idx in range(num_heads):
         X = residual_stream_network1[
             :, :, head_idx, :
@@ -930,4 +939,8 @@ def compute_heads_projection_residual_stream_similarities(
             residual_stream_measures[measure][:, head_idx] = (
                 residual_stream_measures_layers[measure]
             )
+        if (head_idx + 1) % update_every == 0 or (head_idx + 1) == num_heads:
+            progress_bar.update((head_idx + 1) - last_update)
+            last_update = head_idx + 1
+    progress_bar.close()
     return residual_stream_measures

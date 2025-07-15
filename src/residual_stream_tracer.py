@@ -757,11 +757,11 @@ def residual_stream_tracer(
             "Dataset is empty. Cannot extract residual stream from empty dataset."
         )
 
-    print("\n" + "=" * 100)
+    print("\n" + "-" * 80)
     print(
         f"Tracing residual stream of type {residual_stream_type} with tokens pooling method: {tokens_pooling_method}"
     )
-    print("=" * 100)
+    print("-" * 80)
 
     # Initialize the appropriate tracer based on residual_stream_type
     tokens_pooling_method = (
@@ -791,7 +791,7 @@ def residual_stream_tracer(
     # Initialize progress tracking variables
     samples_processed = 0
     update_count = 0
-    update_every = max(1, int(0.05 * dataset_size))
+    update_every = max(1, int(0.1 * dataset_size))
 
     print(f"Processing {dataset_size} samples...")
     progress_bar = tqdm(
@@ -832,10 +832,10 @@ def residual_stream_tracer(
     gc.collect()
     torch.cuda.empty_cache()
 
-    print("\n" + "=" * 100)
+    print("\n" + "-" * 80)
     print(
-        f"Residual stream extracted successfully in {(end_time - start_time) / 60:.2f} minutes"
+        f"Residual stream extracted successfully in ⌛ {(end_time - start_time) / 60:.2f} minutes"
     )
-    print("=" * 100 + "\n")
+    print("-" * 80 + "\n")
 
     return residual_stream

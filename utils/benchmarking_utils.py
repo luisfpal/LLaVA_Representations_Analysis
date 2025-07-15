@@ -63,17 +63,18 @@ def benchmark_model_vqa_processed_dataloader(
     correct_answers = 0
     incorrect_answers = 0
 
-    dataset_size = len(processed_dataloader)
+    dataset_size = len(processed_dataloader.dataset)
     progress_bar = tqdm(total=dataset_size, desc="Processing samples", unit="sample")
-    update_count = 0
     update_every = max(1, int(0.1 * dataset_size))
-    samples_processed = 0
+    last_update = 0
+    counter = 0
 
     for batch, answer_letters in processed_dataloader:
         current_batch_size, input_ids_length = batch.input_ids.shape[:2]
+        counter += current_batch_size
         with torch.no_grad():
             kwargs_for_generate = {
-                **batch,
+                **batch.to(model.device),
                 "max_new_tokens": max_new_tokens,
                 "do_sample": False,
             }
@@ -101,12 +102,9 @@ def benchmark_model_vqa_processed_dataloader(
             else:
                 incorrect_answers += 1
 
-        samples_processed += current_batch_size
-        update_count += current_batch_size
-
-        if update_count % update_every == 0 or samples_processed == dataset_size:
-            progress_bar.update(update_count)
-            update_count = 0
+        if counter % update_every == 0 or counter == dataset_size:
+            progress_bar.update(counter - last_update)
+            last_update = counter
 
     progress_bar.close()
     torch.cuda.empty_cache()

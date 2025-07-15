@@ -2,13 +2,12 @@
 # This script runs residual stream extraction and measures evaluation
 
 # --- Configuration Section ---
-DATASET_NAME_OR_PATH="~/scratch/datasets/cocoqa_unified"
+DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
 # Analysis configuration
-RESIDUAL_STREAM_TYPES="output_layer,post_mlp"
-# RESIDUAL_STREAM_TYPES="heads_projection"
-TOKENS_POOLING_METHODS="mean,last"
-# TOKENS_POOLING_METHODS="none"
+RESIDUAL_STREAM_TYPES="post_mlp"
+TOKENS_POOLING_METHODS="none"
+SIMILARITY_MEASURES="neighborhood_overlap,linear_cka,svcca"
 
 # Similarity measure parameters
 MAXK="30"
@@ -33,12 +32,13 @@ FILEPATH="$PROJECT_DIR/scripts/$FILENAME"
 
 # --- Argument Construction ---
 SCRIPT_ARGS=()
-SCRIPT_ARGS+=(--result-parent-dir "$RESULTS_DIR")
-SCRIPT_ARGS+=(--dataset-name-or-path "$DATASET_NAME_OR_PATH")
+SCRIPT_ARGS+=(--results-dir "$RESULTS_DIR")
+SCRIPT_ARGS+=(--dataset-path-or-name "$DATASET_PATH_OR_NAME")
 SCRIPT_ARGS+=(--model-cache-dir "$MODEL_CACHE_DIR")
 SCRIPT_ARGS+=(--batch-size "$BATCH_SIZE")
 SCRIPT_ARGS+=(--residual-stream-types "$RESIDUAL_STREAM_TYPES")
 SCRIPT_ARGS+=(--tokens-pooling-methods "$TOKENS_POOLING_METHODS")
+SCRIPT_ARGS+=(--similarity-measures "$SIMILARITY_MEASURES")
 SCRIPT_ARGS+=(--maxk "$MAXK")
 SCRIPT_ARGS+=(--accept-rate "$ACCEPT_RATE")
 SCRIPT_ARGS+=(--id-nn-rank "$ID_NN_RANK")
@@ -57,11 +57,12 @@ mkdir -p "$RESULTS_DIR"
 
 # Print configuration
 echo "====== Residual Stream Analysis Configuration ======"
-echo "Dataset: $DATASET_NAME_OR_PATH"
+echo "Dataset: $DATASET_PATH_OR_NAME"
 echo "Results directory: $RESULTS_DIR"
 echo "Model cache directory: $MODEL_CACHE_DIR"
 echo "Residual stream types: $RESIDUAL_STREAM_TYPES"
 echo "Token pooling methods: $TOKENS_POOLING_METHODS"
+echo "Similarity measures: $SIMILARITY_MEASURES"
 echo "Max k (neighborhood overlap): $MAXK"
 echo "Accept rate (SVCCA): $ACCEPT_RATE"
 echo "ID NN rank: $ID_NN_RANK"

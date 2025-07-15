@@ -26,7 +26,7 @@ MULTIMODAL_EXTRACTION_ARGS = {
 
 DATALOADER_ARGS = {
     "dataset_path_or_name": "~/scratch/datasets/cocoqa_unified",
-    "dataset_cache_dir": DATASET_CACHE_DIR,  # not used here
+    "cache_dir": DATASET_CACHE_DIR,  # not used here
     "downsample_size": 2500,
     "batch_size": 25,
     "texts_qa": False,
@@ -124,8 +124,8 @@ def test_residual_stream_heads_projection_tracer_mean_pooling():
 if __name__ == "__main__":
     seed_all(42)
 
-    # test_residual_stream_output_layer_tracer_mean_pooling()
-    test_residual_stream_output_layer_tracer_none_pooling()
+    test_residual_stream_output_layer_tracer_mean_pooling()
+    # test_residual_stream_output_layer_tracer_none_pooling()
     # test_residual_stream_post_mlp_tracer_mean_pooling()
     # test_residual_stream_post_mlp_tracer_none_pooling()
     # test_residual_stream_heads_projection_tracer_mean_pooling()

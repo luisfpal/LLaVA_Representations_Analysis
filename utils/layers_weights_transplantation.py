@@ -28,6 +28,8 @@ def layers_list_transplantation(
             - lm_head
     """
 
+    print(f"Transplanting layers {layers} from source model to target model... 🔄")
+
     if not in_place_transplantation:
         # Create deep copy of target model and move to CPU
         target_model_copy = copy.deepcopy(target_model).cpu()
@@ -147,7 +149,7 @@ def two_parts_transplantation(
         )
 
     # Generate list of layers to transplant (first part)
-    layers_to_transplant = list(range(split_layer))
+    layers_to_transplant = list(range(split_layer + 1))
 
     # Include lm_head if splitting at the very end
     if split_layer == num_layers:
