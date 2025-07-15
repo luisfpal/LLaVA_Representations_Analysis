@@ -1,0 +1,73 @@
+# Configuration file for multimodal finetuned representations analysis
+# This provides an alternative to hardcoded paths in the data loader
+
+# Base paths (relative to notebooks directory)
+paths:
+  results_dir: "../results"
+  output_dir: "./outputs"
+  plots_dir: "./plots"
+
+# Model name mappings for cleaner variable names
+models:
+  mapping:
+    "llava-1.5-7b-hf": "llava_base"
+    "llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5": "llava_pretrained"
+
+  display_names:
+    "llava_base": "LLaVA Base"
+    "llava_pretrained": "LLaVA Pretrained"
+
+# Dataset configurations
+datasets:
+  types: ["cocoqa_img", "cocoqa_txt"]
+  display_names:
+    "cocoqa_img": "COCO-QA (Image + Text)"
+    "cocoqa_txt": "COCO-QA (Text Only)"
+
+# Analysis configurations
+analysis:
+  stream_types: ["output_layer", "post_mlp", "heads_projection"]
+  pooling_methods: ["last", "mean", "none"]
+  similarity_measures: ["neighborhood_overlap", "linear_cka", "svcca"]
+
+  # Default parameters for intrinsic dimension
+  intrinsic_dimension:
+    default_k: 16
+    default_range_max: 100
+
+  # Default parameters for similarity measures
+  similarity_params:
+    neighborhood_overlap:
+      maxk: 30
+    svcca:
+      accept_rate: 0.95
+
+# Plotting configurations
+plotting:
+  default_figsize: [12, 8]
+  colors:
+    llava_base: "#1f77b4" # Blue
+    llava_pretrained: "#ff7f0e" # Orange
+  markers:
+    llava_base: "o"
+    llava_pretrained: "s"
+
+  # Default styling
+  style:
+    grid: true
+    grid_alpha: 0.3
+    dpi: 150
+
+# File naming patterns
+file_patterns:
+  entropy:
+    dataset: "dataset_entropy_{stream_type}_{pooling}.safetensors"
+    prompt: "prompt_entropy_{stream_type}_{pooling}.safetensors"
+
+  intrinsic_dimension: "id_{k}_{range_max}_{stream_type}_{pooling}.safetensors"
+
+  similarity: "{model1}_vs_{model2}_{stream_type}_{pooling}.safetensors"
+
+  transplantation:
+    sliding_window: "*_sliding_window_*.csv"
+    two_parts: "*_two_parts_*.csv"
