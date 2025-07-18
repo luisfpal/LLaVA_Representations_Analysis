@@ -18,10 +18,10 @@ COCOQA_DATASET_ARGS = {
     "downsample_size": 2500,
 }
 DATASETS = {
-    # "cocoqa_txt": {
-    #     "texts_qa": True,
-    #     **COCOQA_DATASET_ARGS,
-    # },
+    "cocoqa_txt": {
+        "texts_qa": True,
+        **COCOQA_DATASET_ARGS,
+    },
     "cocoqa_img": {
         "images_qa": True,
         **COCOQA_DATASET_ARGS,

@@ -1,0 +1,26 @@
+# Configuration for multimodal analysis results loader
+
+# File paths
+paths:
+  results: "../results"
+
+# Model name mappings
+models:
+  "llava-1.5-7b-hf": "full"
+  "llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5": "pretrained"
+
+# Available datasets
+datasets:
+  - "cocoqa_img"
+  - "cocoqa_txt"
+
+# Analysis parameters
+analysis:
+  stream_types: ["output_layer", "post_mlp", "heads_projection"]
+  pooling_methods: ["last", "mean", "none"]
+  similarity_measures: ["neighborhood_overlap", "linear_cka", "svcca"]
+
+  # Default parameters for intrinsic dimension analysis
+  intrinsic_dimension_defaults:
+    k: 16
+    range_max: 100
