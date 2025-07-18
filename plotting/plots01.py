@@ -7,6 +7,23 @@ from utils import plot_similarity_measure_matrix
 from config_results_loader import ResultsLoader
 
 
+# Constants for commonly used values
+DEFAULT_MEASURES = ["neighborhood_overlap", "linear_cka"]
+DEFAULT_POOLING_METHODS = ["last", "mean"]
+PROMPT_ENTROPY_POOLING = ["none"]
+PLOTS_DIR = Path(__file__).parent.parent / "plots"
+
+
+def save_plot_if_requested(save_plots: bool, filename: str):
+    """Helper function to save or show plot based on save_plots flag."""
+    if save_plots:
+        PLOTS_DIR.mkdir(exist_ok=True)
+        plt.savefig(PLOTS_DIR / filename, dpi=300, bbox_inches="tight")
+        plt.close()
+    else:
+        plt.show()
+
+
 def plot_similarity_measures_matrix(
     results_loader: ResultsLoader,
     dataset: str,
@@ -99,23 +116,24 @@ def plot_similarity_measures_matrix(
     plt.tight_layout()
     plt.subplots_adjust(top=0.92, wspace=wspace)  # Reduced wspace for tighter layout
 
-    if save_plots:
-        plots_dir = Path(__file__).parent.parent / "plots"
-        plots_dir.mkdir(exist_ok=True)
-        filename = f"similarity_matrix_{dataset}_{stream_type}_{pooling}_{'_'.join(measures)}.png"
-        plt.savefig(plots_dir / filename, dpi=300, bbox_inches="tight")
-        plt.close()
-    else:
-        plt.show()
+    filename = (
+        f"similarity_matrix_{dataset}_{stream_type}_{pooling}_{'_'.join(measures)}.png"
+    )
+    save_plot_if_requested(save_plots, filename)
 
 
 def plot_all_similarity_measures_matrices(
     results_loader: ResultsLoader, save_plots: bool = False
 ):
+    """Plot similarity measures matrices for heads projection data."""
+    # Configuration for heads projection matrices
+    datasets = ["cocoqa_txt", "cocoqa_img", "cocoqa_txt_minus_cocoqa_img"]
+    pooling_methods = ["last", "mean"]
+
     template_plot = partial(
         plot_similarity_measures_matrix,
         results_loader=results_loader,
-        measures=["neighborhood_overlap", "linear_cka"],
+        measures=DEFAULT_MEASURES,
         max_xticks=10,
         max_yticks=10,
         percentage_threshold=0.08,
@@ -128,35 +146,69 @@ def plot_all_similarity_measures_matrices(
         wspace=-0.05,
         save_plots=save_plots,
     )
-    template_plot(
-        dataset="cocoqa_txt",
-        stream_type="heads_projection",
-        pooling="last",
+
+    for dataset in datasets:
+        for pooling in pooling_methods:
+            template_plot(
+                dataset=dataset,
+                stream_type="heads_projection",
+                pooling=pooling,
+            )
+
+
+def plot_similarity_measures_for_stream_type(
+    results_loader: ResultsLoader,
+    stream_type: str,
+    pooling_methods: List[str] = None,
+    measures: List[str] = None,
+    save_plots: bool = False,
+):
+    """
+    Generic function to plot similarity measures for any stream type.
+
+    Args:
+        results_loader: ResultsLoader instance with loaded data
+        stream_type: Stream type (e.g., "output_layer", "post_mlp", "mean_heads_projection")
+        pooling_methods: List of pooling methods (defaults to ["last", "mean"])
+        measures: List of measures (defaults to ["neighborhood_overlap", "linear_cka"])
+        save_plots: Whether to save plots instead of showing them
+    """
+    if pooling_methods is None:
+        pooling_methods = DEFAULT_POOLING_METHODS
+    if measures is None:
+        measures = DEFAULT_MEASURES
+
+    print(f"\n📊 Plotting {stream_type} with combined pooling methods...")
+    template_plot_similarity_measures(
+        results_loader=results_loader,
+        stream_type=stream_type,
+        pooling_methods=pooling_methods,
+        measures=measures,
+        save_plots=save_plots,
     )
-    template_plot(
-        dataset="cocoqa_img",
-        stream_type="heads_projection",
-        pooling="last",
+
+
+def plot_all_output_layer_similarity_measures(
+    results_loader: ResultsLoader,
+    save_plots: bool = False,
+):
+    """Plot similarity measures for output layer data."""
+    plot_similarity_measures_for_stream_type(
+        results_loader=results_loader,
+        stream_type="output_layer",
+        save_plots=save_plots,
     )
-    template_plot(
-        dataset="cocoqa_txt_minus_cocoqa_img",
-        stream_type="heads_projection",
-        pooling="last",
-    )
-    template_plot(
-        dataset="cocoqa_txt",
-        stream_type="heads_projection",
-        pooling="mean",
-    )
-    template_plot(
-        dataset="cocoqa_img",
-        stream_type="heads_projection",
-        pooling="mean",
-    )
-    template_plot(
-        dataset="cocoqa_txt_minus_cocoqa_img",
-        stream_type="heads_projection",
-        pooling="mean",
+
+
+def plot_all_post_mlp_similarity_measures(
+    results_loader: ResultsLoader,
+    save_plots: bool = False,
+):
+    """Plot similarity measures for post-mlp data."""
+    plot_similarity_measures_for_stream_type(
+        results_loader=results_loader,
+        stream_type="post_mlp",
+        save_plots=save_plots,
     )
 
 
@@ -164,17 +216,10 @@ def plot_all_mean_heads_projection_similarity_measures(
     results_loader: ResultsLoader,
     save_plots: bool = False,
 ):
-    """
-    Plot similarity measures for mean heads projection data.
-    Uses the computed mean across heads: (layers,) matrices.
-    Creates a single 1x2 plot with both pooling methods differentiated by markers/linestyles.
-    """
-    print("\n📊 Plotting mean_heads_projection with combined pooling methods...")
-    template_plot_similarity_measures(
+    """Plot similarity measures for mean heads projection data."""
+    plot_similarity_measures_for_stream_type(
         results_loader=results_loader,
         stream_type="mean_heads_projection",
-        pooling_methods=["last", "mean"],
-        measures=["neighborhood_overlap", "linear_cka"],
         save_plots=save_plots,
     )
 
@@ -368,48 +413,8 @@ def template_plot_similarity_measures(
     plt.suptitle(f"{stream_type}", fontsize=16, y=0.98)
     plt.tight_layout()
 
-    if save_plots:
-        plots_dir = Path(__file__).parent.parent / "plots"
-        plots_dir.mkdir(exist_ok=True)
-        filename = f"similarity_measures_{stream_type}_{'_'.join(pooling_methods)}_{'_'.join(measures)}.png"
-        plt.savefig(plots_dir / filename, dpi=300, bbox_inches="tight")
-        plt.close()
-    else:
-        plt.show()
-
-
-def plot_all_output_layer_similarity_measures(
-    results_loader: ResultsLoader,
-    save_plots: bool = False,
-):
-    """
-    Plot similarity measures for output layer data.
-    """
-    print("\n📊 Plotting output_layer with combined pooling methods...")
-    template_plot_similarity_measures(
-        results_loader=results_loader,
-        stream_type="output_layer",
-        pooling_methods=["last", "mean"],
-        measures=["neighborhood_overlap", "linear_cka"],
-        save_plots=save_plots,
-    )
-
-
-def plot_all_post_mlp_similarity_measures(
-    results_loader: ResultsLoader,
-    save_plots: bool = False,
-):
-    """
-    Plot similarity measures for post-mlp data.
-    """
-    print("\n📊 Plotting post_mlp with combined pooling methods...")
-    template_plot_similarity_measures(
-        results_loader=results_loader,
-        stream_type="post_mlp",
-        pooling_methods=["last", "mean"],
-        measures=["neighborhood_overlap", "linear_cka"],
-        save_plots=save_plots,
-    )
+    filename = f"similarity_measures_{stream_type}_{'_'.join(pooling_methods)}_{'_'.join(measures)}.png"
+    save_plot_if_requested(save_plots, filename)
 
 
 def template_plot_model_data_measures(
@@ -434,10 +439,7 @@ def template_plot_model_data_measures(
     pooling_styles = {
         "last": {"marker": "o", "linestyle": "-"},
         "mean": {"marker": "s", "linestyle": "--"},
-        "none": {
-            "marker": "^",
-            "linestyle": ":",
-        },  # Triangle marker, dotted line for "none"
+        "none": {"marker": "^", "linestyle": ":"},
     }
 
     if "model_data_measures" not in results_loader.data:
@@ -645,62 +647,34 @@ def template_plot_model_data_measures(
         y=0.98,
     )
     plt.tight_layout()
-    if save_plots:
-        plots_dir = Path(__file__).parent.parent / "plots"
-        plots_dir.mkdir(exist_ok=True)
-        filename = f"model_data_measures_{dataset_measure}_{stream_type}_{'_'.join(pooling_methods)}.png"
-        plt.savefig(plots_dir / filename, dpi=300, bbox_inches="tight")
-        plt.close()
-    else:
-        plt.show()
+
+    filename = f"model_data_measures_{dataset_measure}_{stream_type}_{'_'.join(pooling_methods)}.png"
+    save_plot_if_requested(save_plots, filename)
 
 
 def plot_all_model_data_measures(
     results_loader: ResultsLoader,
     save_plots: bool = False,
 ):
-    template_plot_model_data_measures(
-        results_loader=results_loader,
-        dataset_measure="dataset_entropy",
-        stream_type="output_layer",
-        pooling_methods=["last", "mean"],
-        save_plots=save_plots,
-    )
-    template_plot_model_data_measures(
-        results_loader=results_loader,
-        dataset_measure="prompt_entropy",
-        stream_type="output_layer",
-        pooling_methods=["none"],
-        save_plots=save_plots,
-    )
-    template_plot_model_data_measures(
-        results_loader=results_loader,
-        dataset_measure="intrinsic_dimension",
-        stream_type="output_layer",
-        pooling_methods=["last", "mean"],
-        save_plots=save_plots,
-    )
-    template_plot_model_data_measures(
-        results_loader=results_loader,
-        dataset_measure="dataset_entropy",
-        stream_type="post_mlp",
-        pooling_methods=["last", "mean"],
-        save_plots=save_plots,
-    )
-    template_plot_model_data_measures(
-        results_loader=results_loader,
-        dataset_measure="prompt_entropy",
-        stream_type="post_mlp",
-        pooling_methods=["none"],
-        save_plots=save_plots,
-    )
-    template_plot_model_data_measures(
-        results_loader=results_loader,
-        dataset_measure="intrinsic_dimension",
-        stream_type="post_mlp",
-        pooling_methods=["last", "mean"],
-        save_plots=save_plots,
-    )
+    """Plot all model data measures for different stream types and dataset measures."""
+    # Define configurations for different combinations
+    configs = [
+        ("dataset_entropy", "output_layer", DEFAULT_POOLING_METHODS),
+        ("prompt_entropy", "output_layer", PROMPT_ENTROPY_POOLING),
+        ("intrinsic_dimension", "output_layer", DEFAULT_POOLING_METHODS),
+        ("dataset_entropy", "post_mlp", DEFAULT_POOLING_METHODS),
+        ("prompt_entropy", "post_mlp", PROMPT_ENTROPY_POOLING),
+        ("intrinsic_dimension", "post_mlp", DEFAULT_POOLING_METHODS),
+    ]
+
+    for dataset_measure, stream_type, pooling_methods in configs:
+        template_plot_model_data_measures(
+            results_loader=results_loader,
+            dataset_measure=dataset_measure,
+            stream_type=stream_type,
+            pooling_methods=pooling_methods,
+            save_plots=save_plots,
+        )
 
 
 def plot_transplanting_layers_benchmarking(
@@ -852,14 +826,9 @@ def plot_transplanting_layers_benchmarking(
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)  # Make room for title and legend
-    if save_plots:
-        plots_dir = Path(__file__).parent.parent / "plots"
-        plots_dir.mkdir(exist_ok=True)
-        filename = f"transplanting_layers_benchmarking_{transplantation_method}.png"
-        plt.savefig(plots_dir / filename, dpi=300, bbox_inches="tight")
-        plt.close()
-    else:
-        plt.show()
+
+    filename = f"transplanting_layers_benchmarking_{transplantation_method}.png"
+    save_plot_if_requested(save_plots, filename)
 
 
 def plot_all_transplanting_layers_benchmarking(
@@ -914,15 +883,15 @@ def main(save_plots: bool = False):
 
     results.print_summary()
 
-    # ! do not touch this code anymore
+    # ! results loaded and processed correctly: don't touch unless necessary
     print("🎉 All processing completed!")
 
-    # plot_all_similarity_measures_matrices(results, save_plots=save_plots)
+    plot_all_similarity_measures_matrices(results, save_plots=save_plots)
     plot_all_output_layer_similarity_measures(results, save_plots=save_plots)
     plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
-    # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
-    # plot_all_model_data_measures(results, save_plots=save_plots)
-    # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
+    plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
+    plot_all_model_data_measures(results, save_plots=save_plots)
+    plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
 
 
 if __name__ == "__main__":
