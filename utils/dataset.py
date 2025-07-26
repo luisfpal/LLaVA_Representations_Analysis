@@ -353,10 +353,10 @@ def _format_as_conversations(questions, images, args):
         hasattr(args, "continue_final_message") and args.continue_final_message
     )
     for question_text, image in zip(questions, images):
-        content = [{"type": "text", "text": f"{question_text}{args.guide_text}"}]
-
+        content = []
         if image is not None:
             content.append({"type": "image"})
+        content.append({"type": "text", "text": f"{question_text}{args.guide_text}"})
 
         conversation = [{"role": "user", "content": content}]
         conversation.insert(0, SYSTEM_ROLE)

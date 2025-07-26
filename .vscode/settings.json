@@ -1,11 +1,16 @@
 {
+  "peacock.color": "navy",
   "python.envFile": "${workspaceFolder}/.env",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.pythonPath": "${workspaceFolder}/.venv/bin/python",
+  "python.terminal.activateEnvironment": false,
   "python.analysis.extraPaths": [
     "${workspaceFolder}"
   ],
-  "python.terminal.activateEnvironment": true,
   "terminal.integrated.env.linux": {
-    "PYTHONPATH": "${workspaceFolder}"
+    "PYTHONPATH": "${workspaceFolder}",
+    "PATH": "/home/l11/.local/bin:${workspaceFolder}/.venv/bin:${env:PATH}",
+    "VIRTUAL_ENV": "${workspaceFolder}/.venv"
   },
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
 }
