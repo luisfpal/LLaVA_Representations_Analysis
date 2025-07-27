@@ -13,7 +13,7 @@ from utils import (
     parse_question_instruction,
     format_prompts,
     get_dataloader,
-    COCOQA_VI_DIGITS_MAP,
+    parse_predicted_answer,
 )
 
 
@@ -103,53 +103,6 @@ def process_predictions(predictions_file: str) -> dict:
     print(f"Count: {total_questions}")
 
     return evaluation_results
-
-
-def process_digits(text: str) -> str:
-    """
-    Replace digit strings in the text with their word equivalents.
-    Handles ambiguity by processing longer digits first.
-    """
-    # Sort keys in descending order of length to prevent substring replacement issues
-    for key in sorted(COCOQA_VI_DIGITS_MAP.keys(), key=len, reverse=True):
-        text = text.replace(key, COCOQA_VI_DIGITS_MAP[key])
-    return text
-
-
-def parse_predicted_answer(predicted_text: str, answer: str) -> str:
-    """
-    Parses the model's predicted answer and checks for a match against the ground truth.
-
-    This function handles two types of evaluation:
-    - Multiple-choice (single character answers, e.g., "A")
-    - Open-ended (free-form text answers, e.g., "apple")
-
-    It performs case-insensitive and trimmed matching, and handles partial matches for open-ended answers.
-
-    Args:
-        predicted_text (str): The raw output from the model.
-        answer (str): The correct answer to compare against.
-
-    Returns:
-        str: The parsed answer if it matches expectations, otherwise 'FAILED'.
-    """
-    predicted_text = predicted_text.strip()
-    answer = answer.strip()
-
-    # Multiple-choice: expect exact match or contained match (e.g., "Answer: A")
-    if len(answer) == 1:
-        if predicted_text == answer:
-            return answer
-        if answer in predicted_text:
-            return answer
-        return "FAILED"
-
-    # Open-ended: allow substring match (e.g., answer="apple", predicted="a green apple")
-    answer = answer.lower()
-    predicted_text = process_digits(predicted_text.lower())
-    if answer in predicted_text or predicted_text in answer:
-        return answer
-    return "FAILED"
 
 
 def save_evaluation_results(results: dict, results_file: str):
@@ -284,13 +237,13 @@ def process_batches(dataloader, model, processor, answers_file, args):
     with open(answers_file, "w") as ans_file_handle:
         # Process each batch
         for batch in dataloader:
-            questions_and_options = batch["questions"]
+            questions = batch["questions"]
             images = batch.get("images", None)
             answer_letters = batch["answer_letters"]
 
             # Process each question in the batch
             full_prompts = format_prompts(
-                questions_and_options=questions_and_options,
+                questions=questions,
                 images=images,
                 args=args,
                 processor=processor,
@@ -364,7 +317,7 @@ def process_batches(dataloader, model, processor, answers_file, args):
                 progress_bar.update(update_every)
 
             del (
-                questions_and_options,
+                questions,
                 images,
                 answer_letters,
                 full_prompts,

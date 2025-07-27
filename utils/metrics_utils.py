@@ -1,9 +1,10 @@
 import math
 import torch
 import numpy as np
-from typing import Union, Tuple
+from typing import Union, Tuple, List, Dict
 from dadapy.data import Data
 from anatome.similarity import svcca_distance
+from tqdm import tqdm
 
 
 def _ensure_device(
@@ -495,6 +496,8 @@ def compute_intrinsic_dimension(
         return MLE(X, k, full_output).item()
     elif algorithm == "scaling_gride":
         return id_scaling_gride(X, k, range_max).item()
+    else:
+        raise ValueError(f"Unknown algorithm: {algorithm}")
 
 
 # https://github.com/lorenzobasile/IDCorrelation/blob/main/utils/intrinsic_dimension.py
@@ -588,64 +591,356 @@ def id_scaling_gride(
     return torch.tensor(data.intrinsic_dim, dtype=torch.float32)
 
 
+def normalize(R: torch.Tensor) -> torch.Tensor:
+    """
+    Mean-center and L2-normalize rows of a 2D or 3D tensor.
+
+    - If R is 2D (N, D): subtract the mean across rows and normalize each row to unit L2 norm.
+    - If R is 3D (L, M, D): apply the above independently for each of the L slices along the first dimension.
+
+    Args:
+        R: Input tensor of shape (L, M, D) or (M, D)
+
+    Returns:
+        Normalized tensor of the same shape as input
+    """
+    with torch.no_grad():
+        if R.dim() == 2:
+            # Original 2D case from https://github.com/waltonfuture/Matrix-Entropy
+            mean = R.mean(dim=0)
+            R = R - mean
+            norms = torch.norm(R, p=2, dim=1, keepdim=True)
+            R = R / norms
+        elif R.dim() == 3:
+            mean = R.mean(dim=1, keepdim=True)  # Shape: (L, 1, D)
+            R = R - mean
+            norms = torch.norm(R, p=2, dim=2, keepdim=True)  # Shape: (L, M, 1)
+            R = R / norms
+        else:
+            raise ValueError("Input tensor must be 2D or 3D")
+    return R
+
+
 # inspired by https://github.com/uk-cliplab/representation-itl/blob/main/src/repitl/matrix_itl.py
 # https://github.com/OFSkean/information_flow/blob/main/experiments/utils/metrics/metric_functions.py
 # https://github.com/OFSkean/information_flow/blob/main/experiments/utils/metrics/metric_calling.py
-def compute_matrix_renyi_entropy(Z: torch.Tensor, alpha: float = 1.0) -> float:
+def compute_matrix_based_renyi_entropy(
+    Z: torch.Tensor, alpha: float = 1.0
+) -> torch.Tensor:
     """
-    Computes the Rényi entropy of order `alpha` for a matrix Z ∈ ℝ^{M × D}
+    Computes the Rényi entropy of order `alpha` for a matrix Z ∈ ℝ^{L × M × D}
     S_alpha(K) = 1 / (1 - alpha) * log(sum_{i=1}^D (lambda_i(K)/trace(K))^alpha)
 
     Args:
-        Z (torch.Tensor): Input matrix of shape (M, D), where M = samples or tokens and D = features.
+        Z (torch.Tensor): Input matrix of shape (L, M, D) or (M, D), where L = layers, M = samples or tokens and D = hidden_size.
         alpha (float): Rényi entropy order (α = 1 for Shannon).
 
     Returns:
-        Scalar entropy.
+        Tensor of shape (L,) or (1,), where L = layers.
     """
-    Z = Z.cpu().numpy()
+    # verify that Z is a 3D tensor
+    if Z.dim() == 2:
+        Z = Z.unsqueeze(0)
+    elif Z.dim() != 3:
+        raise ValueError("Z must be a 2D or 3D tensor")
+    Z = Z.double()
+
+    # shape: (num_layers, num_samples, hidden_size)
+    layers, _, D = Z.shape
+
+    entropies = torch.zeros(layers, dtype=torch.float64)
+
+    # Pre-compute some constants
+    is_shannon = abs(alpha - 1.0) < 1e-6
+    alpha_factor = 1.0 / (1 - alpha) if not is_shannon else 1.0
+
     # Remove duplicates
-    Z, _ = np.unique(Z, axis=0, return_index=True)
-    Z = torch.tensor(Z, dtype=torch.float32)
+    Z_layers = []
+    unique_tensors = set()
+    for layer in range(layers):
+        # shape: (num_samples, hidden_size)
+        Z_layer = Z[layer]
+        # !Different layers could have different unique number of unique tokens/samples
+        Z_layer = torch.unique(Z_layer, dim=0)
+        Z_layers.append(Z_layer)
+        unique_tensors.add(Z_layer.shape[0])
 
-    # Project each row to the unit sphere removing shared components in the direction of the mean
-    Z = normalize(Z)
+    if len(unique_tensors) == 1:
+        # shape: (num_layers, num_samples, hidden_size)
+        Z_layers = torch.stack(Z_layers, dim=0)
 
-    Z = _ensure_device(Z).double()
+        # Project each row to the unit sphere removing shared components in the direction of the mean
+        Z_layers = normalize(Z_layers)
 
-    M, D = Z.shape
-    if M <= D:
-        K = Z @ Z.T  # M x M
+        M = Z_layers.shape[1]  # num_samples
+
+        Z_layers = _ensure_device(Z_layers)  # (num_layers, num_samples, hidden_size)
+
+        if M < D:  # ! This is the most likely case for my experiments
+            K = torch.matmul(Z_layers, Z_layers.transpose(1, 2))
+            # (L, M, D) @ (L, D, M) -> (L, M, M)
+        else:
+            K = torch.matmul(Z_layers.transpose(1, 2), Z_layers)
+            # (L, D, M) @ (L, M, D) -> (L, D, D)
+
+        # Clamp negative eigenvalues due to numerical precision
+        K = torch.clamp(K, min=0.0)  # (L, M, M) or (L, D, D)
+
+        # Normalize kernel matrices by their traces (layer-wise)
+        traces = torch.einsum("lii->l", K)  # Trace per layer
+        K /= traces.view(-1, 1, 1)  # Broadcasting over last two dims
+
+        # Compute eigenvalues (batched)
+        eigenvals = torch.linalg.eigvalsh(K)  # (L, M) or (L, D)
+
+        # Keep only positive eigenvalues
+        eigenvals = torch.where(
+            eigenvals > 0, eigenvals, torch.tensor(0.0, device=eigenvals.device)
+        )
+
+        # Normalize eigenvalues to get probabilities
+        probs = eigenvals / eigenvals.sum(dim=-1, keepdim=True)  # (L, M) or (L, D)
+
+        if is_shannon:
+            entropy = -torch.sum(
+                probs * torch.log(probs + 1e-12), dim=-1
+            )  # Avoid log(0)
+        else:
+            entropy = alpha_factor * torch.log(torch.sum(probs**alpha, dim=-1))
+
+        # Normalize entropy
+        log_min_dim = math.log(min(M, D))
+        entropies = entropy / log_min_dim  # (L,)
+
     else:
-        K = Z.T @ Z  # D x D
+        for layer in range(layers):
+            # shape: (num_samples, hidden_size)
+            Z_layer = Z_layers[layer]
 
-    # Clamp negative eigenvalues due to numerical noise (due to numerical precision)
-    K = torch.clamp(K, min=0.0)
-    # Pre-normalize the kernel matrix -> surrogate Renyi entropy
-    K /= torch.trace(K)
+            # Project each row to the unit sphere removing shared components in the direction of the mean
+            Z_layer = normalize(Z_layer)
 
-    eigenvalues = torch.linalg.eigvalsh(K)
-    eigenvalues = eigenvalues[eigenvalues > 0]
+            M = Z_layer.shape[0]  # num_samples
 
-    probabilities = eigenvalues / eigenvalues.sum()
+            Z_layer = _ensure_device(Z_layer)
 
-    if abs(alpha - 1.0) < 1e-3:
-        entropy = -torch.sum(probabilities * torch.log(probabilities))
+            if M < D:  # ! This is the most likely case for my experiments
+                K = Z_layer @ Z_layer.T  # M x M
+            else:
+                K = Z_layer.T @ Z_layer  # D x D
+
+            # Clamp negative eigenvalues due to numerical noise (due to numerical precision)
+            K = torch.clamp(K, min=0.0)
+
+            # Pre-normalize the kernel matrix -> surrogate Renyi entropy
+            K /= torch.trace(K)
+
+            # Compute eigenvalues
+            # ! Different layers could have different number of eigenvalues
+            eigenvals = torch.linalg.eigvalsh(K)
+            eigenvals = eigenvals[eigenvals > 0]
+            probs = eigenvals / eigenvals.sum()
+            if is_shannon:
+                entropy = -torch.sum(probs * torch.log(probs + 1e-12))  # Avoid log(0)
+            else:
+                entropy = alpha_factor * torch.log(torch.sum(probs**alpha))
+            # maxEntropy normalization
+            # the entropy of a uniform distribution over the eigenvalues is log(min(M, D))
+            entropies[layer] = entropy / min(math.log(M), math.log(D))
+
+    return entropies.cpu()
+
+
+def compute_prompt_entropy_sequential(
+    samples: List[torch.Tensor], alpha: float = 1.0
+) -> torch.Tensor:
+    """
+    Compute matrix-based Rényi entropy for multiple samples sequentially,
+    updating tqdm only every 5% of the total samples.
+
+    Args:
+        samples: List of tensors, each of shape (num_layers, seq_len_i, dim)
+        alpha: Rényi entropy parameter
+
+    Returns:
+        Average entropy per layer across all samples
+    """
+    num_samples = len(samples)
+    num_layers = samples[0].shape[0]
+    layers_entropies = torch.zeros(num_samples, num_layers, dtype=torch.float64)
+
+    update_every = max(1, int(0.1 * num_samples))  # Update every 10%
+    progress_bar = tqdm(total=num_samples, desc="Processing samples", unit="sample")
+    last_update = 0
+
+    for idx, sample in enumerate(samples):
+        result = compute_matrix_based_renyi_entropy(sample, alpha)
+        layers_entropies[idx] = result
+
+        # Update only every `update_every` steps or at the end
+        if (idx + 1) % update_every == 0 or (idx + 1) == num_samples:
+            progress_bar.update((idx + 1) - last_update)
+            last_update = idx + 1
+
+    progress_bar.close()
+    return torch.mean(layers_entropies, dim=0)
+
+
+def compute_layers_residual_stream_entropy(
+    residual_stream: Union[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]],
+    entropy_type: str,
+) -> torch.Tensor:
+    if isinstance(residual_stream, torch.Tensor) and entropy_type == "prompt-entropy":
+        raise ValueError(
+            "Prompt entropy is not supported for a single tensor. Please provide a list of tensors."
+        )
+    elif (
+        isinstance(residual_stream, list) or isinstance(residual_stream, dict)
+    ) and entropy_type == "dataset-entropy":
+        raise ValueError(
+            "Dataset entropy is not supported for a list of tensors. Please provide a single tensor."
+        )
+
+    if isinstance(residual_stream, dict):
+        residual_stream = list(residual_stream.values())
+
+    if entropy_type == "prompt-entropy":
+        # list of num_samples tensors of shape (num_layers, seq_len(idx), hidden_size)
+        return compute_prompt_entropy_sequential(residual_stream)
+        # shape: (num_layers,)
+    elif entropy_type == "dataset-entropy":
+        # shape: (num_layers, num_samples, hidden_size)
+        return compute_matrix_based_renyi_entropy(
+            residual_stream
+        )  # shape: (num_layers,)
     else:
-        entropy = torch.log(torch.sum(probabilities**alpha)) / (1 - alpha)
-
-    # maxEntropy normalization
-    entropy /= min(math.log(M), math.log(D))
-
-    return entropy.item()
+        raise ValueError(f"Invalid entropy type: {entropy_type}")
 
 
-# from https://github.com/waltonfuture/Matrix-Entropy
-def normalize(R):
-    # R is a tensor of shape (num_tokens, hidden_size) or (batch_size, hidden_size)
-    with torch.no_grad():
-        mean = R.mean(dim=0)
-        R = R - mean
-        norms = torch.norm(R, p=2, dim=1, keepdim=True)
-        R = R / norms
-    return R
+def compute_layers_residual_stream_similarities(
+    residual_stream_network1: torch.Tensor,
+    residual_stream_network2: torch.Tensor,
+    similarity_measures: List[str],
+    **kwargs,
+) -> Dict[str, torch.Tensor]:
+    """
+    Compute measures of the residual stream of two networks.
+
+    Args:
+        residual_stream_network1: Tensor of shape (num_layers, num_samples, hidden_size)
+        residual_stream_network2: Tensor of shape (num_layers, num_samples, hidden_size)
+        similarity_measures:
+            - neighborhood_overlap
+            - linear_cka
+            - svcca
+        **kwargs:
+            - maxk: int = 30 for neighborhood_overlap
+            - accept_rate: float = 0.95 for svcca
+
+    Returns:
+        Dict of tensors of measures of the residual stream of shape (num_layers,)
+    """
+    num_layers, num_samples, _ = residual_stream_network1.shape
+    num_layers_2, num_samples_2, _ = residual_stream_network2.shape
+    if num_layers != num_layers_2 or num_samples != num_samples_2:
+        raise ValueError(
+            "The number of layers and samples of the two networks must be the same"
+        )
+    residual_stream_measures = {}
+    for measure in similarity_measures:
+        residual_stream_measures[measure] = torch.zeros(num_layers, dtype=torch.float64)
+        for layer in range(num_layers):
+            residual_stream_measures[measure][layer] = compute_similarity(
+                residual_stream_network1[layer],
+                residual_stream_network2[layer],
+                measure,
+                **kwargs,
+            )
+    return residual_stream_measures
+
+
+def compute_layers_intrinsic_dimension(
+    residual_stream: torch.Tensor,
+    algorithm: str = "scaling_gride",
+    **kwargs,
+) -> torch.Tensor:
+    """
+    Compute intrinsic dimension of the residual stream.
+    """
+    num_layers = residual_stream.shape[0]
+    intrinsic_dimension = torch.zeros(num_layers, dtype=torch.float64)
+    for layer in range(num_layers):
+        id_layer = compute_intrinsic_dimension(
+            residual_stream[layer], algorithm=algorithm, **kwargs
+        )
+        intrinsic_dimension[layer] = id_layer
+    return intrinsic_dimension
+
+
+def compute_heads_projection_residual_stream_similarities(
+    residual_stream_network1: torch.Tensor,
+    residual_stream_network2: torch.Tensor,
+    similarity_measures: List[str],
+    **kwargs,
+) -> Dict[str, torch.Tensor]:
+    """
+    Compute measures of the heads projection residual stream of two networks.
+
+    Args:
+        residual_stream_network1: Tensor of shape (num_layers, num_samples, num_heads, hidden_size)
+        residual_stream_network2: Tensor of shape (num_layers, num_samples, num_heads, hidden_size)
+        similarity_measures:
+            - neighborhood_overlap
+            - linear_cka
+            - svcca
+        **kwargs:
+            - maxk: int = 30 for neighborhood_overlap
+            - accept_rate: float = 0.95 for svcca
+
+    Returns:
+        Dict of tensors of measures of the heads projection residual stream of shape (num_layers, num_heads)
+    """
+    num_layers, num_samples, num_heads, _ = residual_stream_network1.shape
+    num_layers_2, num_samples_2, num_heads_2, _ = residual_stream_network2.shape
+    if (
+        num_layers != num_layers_2
+        or num_samples != num_samples_2
+        or num_heads != num_heads_2
+    ):
+        raise ValueError(
+            "The number of layers, samples and heads of the two networks must be the same"
+        )
+    residual_stream_measures = {}
+    for measure in similarity_measures:
+        residual_stream_measures[measure] = torch.zeros(
+            num_layers, num_heads, dtype=torch.float64
+        )
+
+    update_every = max(1, int(0.1 * num_heads))  # Update every 10%
+    progress_bar = tqdm(
+        total=num_heads, desc="Processing heads similarities", unit="head"
+    )
+    last_update = 0
+
+    for head_idx in range(num_heads):
+        X = residual_stream_network1[
+            :, :, head_idx, :
+        ]  # (num_layers, num_samples, hidden_size)
+        Y = residual_stream_network2[
+            :, :, head_idx, :
+        ]  # (num_layers, num_samples, hidden_size)
+        residual_stream_measures_layers = compute_layers_residual_stream_similarities(
+            X,
+            Y,
+            similarity_measures=similarity_measures,
+            **kwargs,
+        )
+        for measure in similarity_measures:
+            residual_stream_measures[measure][:, head_idx] = (
+                residual_stream_measures_layers[measure]
+            )
+        if (head_idx + 1) % update_every == 0 or (head_idx + 1) == num_heads:
+            progress_bar.update((head_idx + 1) - last_update)
+            last_update = head_idx + 1
+    progress_bar.close()
+    return residual_stream_measures

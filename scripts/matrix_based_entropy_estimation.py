@@ -6,7 +6,7 @@ from typing import Dict, Optional
 from utils import (
     seed_all,
     sample_unique_row_indices,
-    compute_renyi_entropy,
+    compute_matrix_renyi_entropy,
     load_layers_residual_stream,
 )
 
@@ -60,7 +60,7 @@ def analyze_renyi_entropy(
             if not isinstance(R, torch.Tensor):
                 R = torch.tensor(R, dtype=torch.float32)
 
-            renyi_entropy = compute_renyi_entropy(R, alpha=alpha)
+            renyi_entropy = compute_matrix_renyi_entropy(R, alpha=alpha)
             renyi_entropies[layer_idx] = renyi_entropy
     else:
         # Single layer case
@@ -79,7 +79,7 @@ def analyze_renyi_entropy(
         if not isinstance(R, torch.Tensor):
             R = torch.tensor(R, dtype=torch.float32)
 
-        renyi_entropy = compute_renyi_entropy(R, alpha=alpha)
+        renyi_entropy = compute_matrix_renyi_entropy(R, alpha=alpha)
         renyi_entropies[-1] = renyi_entropy  # Use -1 to indicate the default layer
 
     return renyi_entropies

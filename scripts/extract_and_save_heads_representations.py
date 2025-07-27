@@ -142,12 +142,12 @@ def heads_representations_extractor(
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(dataloader):
-            questions_and_options = batch["questions"]
+            questions = batch["questions"]
             images = batch.get("images", None)
-            batch_size = len(questions_and_options)
+            batch_size = len(questions)
 
             full_prompts = format_prompts(
-                questions_and_options=questions_and_options,
+                questions=questions,
                 images=images,
                 args=args,
                 processor=processor,
@@ -157,7 +157,7 @@ def heads_representations_extractor(
 
             processor_kwargs = {
                 "text": full_prompts,
-                "padding": (True if args.batch_size > 1 else False),
+                "padding": (True if batch_size > 1 else False),
                 "return_tensors": "pt",
             }
 
@@ -201,7 +201,7 @@ def heads_representations_extractor(
 
             # Clean up batch-specific variables
             del (
-                questions_and_options,
+                questions,
                 images,
                 full_prompts,
                 processor_kwargs,

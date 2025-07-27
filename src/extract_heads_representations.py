@@ -15,6 +15,13 @@ class HeadProjectionTracer:
         Extracts per-head representations from the residual stream projections
         after the attention mechanism, before the MLP normalization.
 
+        # ! TODO: fix the code for supporting batch size > 1 if needed.
+        # ! The code is fast enough but it's not optimized for batch size > 1.
+        # ! Currently, the code assumes batch size = 1 because
+        # ! the pooling doesn't mask the padding tokens.
+        # ! The residual stream projections should be outputted in another
+        # ! data structure, rather than a dictionary.
+
         Parameters:
         - model: HuggingFace transformer or Multimodal model (e.g., LLaVA)
         - target_layers: list of integers (layer indices to trace) or string (e.g., "all")

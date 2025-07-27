@@ -4,28 +4,21 @@ ACCOUNT="dssc"
 JOB_NAME="experiment"
 PARTITION="DGX"
 GPUS=1
-# Extract heads representations parameters
-# CPUS=40
-# MEM="70GB"
-# TIME="0:30:00"
-# Less demanding parameters
-CPUS=20
-MEM="20GB"
-TIME="00:10:00"
+CPUS=48
+MEM="100GB"
+TIME="03:00:00"
+
+# MEM="100GB"
+# MEM="564GB"
+# TIME="06:00:00"
 
 PROJECT_ROOT="$HOME/multimodal_finetuned_representations"
 LOG_DIR="$PROJECT_ROOT/.experiments_logs"
 mkdir -p "$LOG_DIR"
 
-# SCRIPT="evaluate_benchmarks.sh"
-# SCRIPT="extract_residual_streams.sh"
-# SCRIPT="analyze_residual_streams.sh"
-# SCRIPT="intrinsic_dimension_estimation.sh"
-SCRIPT="renyi_entropy_evaluation.sh"
-# SCRIPT="extract_heads_representations.sh"
-# SCRIPT="analyze_heads_representations.sh"
+SCRIPT="transplanting_layers_benchmarking.sh"
 
-# ====================== S  BATCH Script Creation ====================== #
+# ====================== SBATCH Script Creation ====================== #
 SBATCH_SCRIPT=$(mktemp /tmp/sbatch_experiment.XXXXXX.sh)
 
 cat <<EOT >"$SBATCH_SCRIPT"

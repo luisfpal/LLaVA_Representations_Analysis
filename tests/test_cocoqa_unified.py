@@ -2,7 +2,7 @@ from datasets import load_from_disk
 import os
 from rich import print
 
-dataset_dir = os.path.expanduser("~/scratch/datasets/cocoqa_captioning_restval")
+dataset_dir = os.path.expanduser("~/scratch/datasets/cocoqa_unified")
 
 loaded_dataset = load_from_disk(dataset_dir)
 
