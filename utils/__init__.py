@@ -53,6 +53,7 @@ from .benchmarking_utils import (
     benchmark_model_vqa_processed_dataloader,
 )
 from .layers_weights_transplantation import transplant_layers_weights
+from .plot_utils import plot_similarity_measure_heatmap, plot_similarity_measure_matrix
 
 __all__ = [
     "parse_layer_index",
@@ -95,4 +96,6 @@ __all__ = [
     "parse_predicted_answer",
     "benchmark_model_vqa_processed_dataloader",
     "transplant_layers_weights",
+    "plot_similarity_measure_heatmap",
+    "plot_similarity_measure_matrix",
 ]
