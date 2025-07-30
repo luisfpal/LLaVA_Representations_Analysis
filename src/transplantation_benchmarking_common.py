@@ -1,60 +1,15 @@
 import gc
 import os
 import argparse
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Callable, Any
 import time
 import pandas as pd
 import torch
-from utils import (
-    get_dataloader,
-    setup_multimodal_model,
-    benchmark_model_vqa_processed_dataloader,
-    transplant_layers_weights,
-)
+from utils import setup_multimodal_model, transplant_layers_weights
 from utils.operations_utils import seed_all
 
-COCOQA_DATASET_ARGS = {
-    "guide_text": "Answer the question using a single word or phrase.\n",
-    "downsample_size": 2500,
-}
-DATASETS = {
-    # "cocoqa_txt": {
-    #     "texts_qa": True,
-    #     **COCOQA_DATASET_ARGS,
-    # },
-    "cocoqa_img": {
-        "images_qa": True,
-        **COCOQA_DATASET_ARGS,
-    },
-}
-TRANSPLANTATION_WEIGHTS_METHODS = {
-    "sliding_window": {
-        "stride": 2,
-        "window_size": 2,
-    },
-    "two_parts": {
-        "stride": 2,
-    },
-}
-
-
-def benchmark_model(
-    model,
-    processed_dataloader,
-    processor,
-    max_new_tokens: int,
-    dtype: torch.dtype = torch.float16,
-) -> Dict[str, float]:
-    """Benchmark model with automatic GPU device management."""
-    model.to(device="cuda:0", dtype=dtype)
-    results = benchmark_model_vqa_processed_dataloader(
-        model=model,
-        processed_dataloader=processed_dataloader,
-        processor=processor,
-        max_new_tokens=max_new_tokens,
-    )
-    model.to("cpu")
-    return results
+# Transplantation methods configuration - will be set dynamically based on args
+TRANSPLANTATION_WEIGHTS_METHODS = {}
 
 
 def get_transplantation_layers(method: str, num_layers: int, stride: int) -> List[int]:
@@ -87,6 +42,7 @@ def run_transplantation_experiments(
     processed_dataloader,
     processor,
     max_new_tokens: int,
+    benchmark_func: Callable,
 ) -> Dict[str, Dict[str, float]]:
     """Run transplantation experiments for the specified method."""
     stride = method_args["stride"]
@@ -97,6 +53,7 @@ def run_transplantation_experiments(
     print(f"Running {method} transplantation... 🔄")
     print(f"Number of layers transplantations: {len(layers)}")
     print(f"{'+-' * 40}\n")
+    
     for idx, layer_value in enumerate(layers):
         progress = (idx + 1) / len(layers)
         print(
@@ -113,7 +70,7 @@ def run_transplantation_experiments(
             in_place_transplantation=False,
         )
 
-        results = benchmark_model(
+        results = benchmark_func(
             model_with_transplanted_layers,
             processed_dataloader,
             processor,
@@ -174,10 +131,11 @@ def benchmark_baseline_models(
     processed_dataloader,
     processor,
     max_new_tokens: int,
+    benchmark_func: Callable,
 ) -> Tuple[Dict[str, float], Dict[str, float]]:
     """Benchmark both baseline models and return their results."""
     print("\nBenchmarking baseline multimodal model... 📊")
-    mm_model_results = benchmark_model(
+    mm_model_results = benchmark_func(
         multimodal_model,
         processed_dataloader,
         processor,
@@ -186,7 +144,7 @@ def benchmark_baseline_models(
     )
 
     print("\nBenchmarking multimodal model with pretrained connector... 📊")
-    mm_pretrained_connector_results = benchmark_model(
+    mm_pretrained_connector_results = benchmark_func(
         multimodal_model_pretrained_connector,
         processed_dataloader,
         processor,
@@ -197,51 +155,50 @@ def benchmark_baseline_models(
     return mm_model_results, mm_pretrained_connector_results
 
 
-def main():
+def create_benchmark_model_wrapper(benchmark_func: Callable) -> Callable:
+    """Create a wrapper for the benchmark function with GPU device management."""
+    def benchmark_model(
+        model,
+        processed_dataloader,
+        processor,
+        max_new_tokens: int,
+        dtype: torch.dtype = torch.float16,
+    ) -> Dict[str, float]:
+        """Benchmark model with automatic GPU device management."""
+        model.to(device="cuda:0", dtype=dtype)
+        results = benchmark_func(
+            model=model,
+            processed_dataloader=processed_dataloader,
+            processor=processor,
+            max_new_tokens=max_new_tokens,
+        )
+        model.to("cpu")
+        return results
+    
+    return benchmark_model
+
+
+def run_transplantation_benchmarking(
+    args: argparse.Namespace,
+    dataset_config: Dict[str, Any],
+    get_dataloader_func: Callable,
+    benchmark_func: Callable,
+    results_subdir: str,
+) -> None:
     """
-    Benchmark model performance with layer transplantation between multimodal models.
-
-    This script evaluates how transplanting layers from a source multimodal model
-    to a target model (with pretrained connector) affects VQA performance.
-
-    Two transplantation methods are supported:
-    - sliding_window: Transplant consecutive layers in a sliding window pattern
-    - two_parts: Split model at a layer and transplant the first part
-
-    Results are saved as CSV files in the following structure:
-    results/transplanting_layers_benchmarking/{dataset_name}/
-    ├── {models}_sliding_window_ws{window_size}_s{stride}.csv
-    └── {models}_two_parts_s{stride}.csv
-
-    Each CSV contains accuracy metrics for different transplantation configurations
-    plus baseline results for both the original multimodal model and the model
-    with pretrained connector.
+    Run transplantation benchmarking experiments.
+    
+    Args:
+        args: Command line arguments
+        dataset_config: Configuration for the dataset
+        get_dataloader_func: Function to get the dataloader
+        benchmark_func: Function to benchmark the model
+        results_subdir: Subdirectory name for results
     """
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--multimodal_model_name_or_path", type=str, required=True)
-    parser.add_argument("--model_cache_dir", type=str, required=True)
-    parser.add_argument("--pretrained_projector_name_or_path", type=str, required=True)
-    parser.add_argument("--language_model_name_or_path", type=str, required=True)
-    parser.add_argument(
-        "--transplantation_method",
-        type=str,
-        required=True,
-        choices=list(TRANSPLANTATION_WEIGHTS_METHODS.keys()),
-    )
-    parser.add_argument("--batch_size", type=int, default=15)
-    parser.add_argument("--max_new_tokens", type=int, default=1)
-    parser.add_argument("--results_dir", type=str, required=True)
-    parser.add_argument("--dataset_path_or_name", type=str, required=True)
-    parser.add_argument("--seed", type=int, default=42)
-    args = parser.parse_args()
-
     seed_all(args.seed)
 
     # Setup models
-    multimodal_model, multimodal_model_pretrained_connector, processor = setup_models(
-        args
-    )
+    multimodal_model, multimodal_model_pretrained_connector, processor = setup_models(args)
     model_num_layers = multimodal_model.language_model.config.num_hidden_layers
     models_name = (
         f"{args.multimodal_model_name_or_path.split('/')[-1]}"
@@ -250,27 +207,28 @@ def main():
 
     # Setup output directories
     results_dir = os.path.expanduser(args.results_dir)
-    benchmarking_results_dir = os.path.join(
-        results_dir, "transplanting_layers_benchmarking"
-    )
+    benchmarking_results_dir = os.path.join(results_dir, results_subdir)
     os.makedirs(benchmarking_results_dir, exist_ok=True)
 
+    # Create benchmark model wrapper
+    benchmark_model = create_benchmark_model_wrapper(benchmark_func)
+
     # Process each dataset
-    for dataset_name, dataset_args in DATASETS.items():
+    for dataset_name, dataset_args in dataset_config.items():
         print(f"\n{'=' * 80}")
         print(f"Processing dataset: {dataset_name} 📊")
         print(f"{'=' * 80}\n")
 
-        processed_dataloader = get_dataloader(
-            **{
-                **dataset_args,
-                "dataset_path_or_name": args.dataset_path_or_name,
-                "processor": processor,
-                "answer_letters_with_processed_batch": True,
-                "batch_size": args.batch_size,
-                "seed": args.seed,
-            }
-        )
+        # Prepare dataloader arguments
+        dataloader_kwargs = {
+            **dataset_args,
+            "dataset_path_or_name": args.dataset_path_or_name,
+            "processor": processor,
+            "batch_size": args.batch_size,
+            "seed": args.seed,
+        }
+        
+        processed_dataloader = get_dataloader_func(**dataloader_kwargs)
 
         dataset_dir = os.path.join(benchmarking_results_dir, dataset_name)
         os.makedirs(dataset_dir, exist_ok=True)
@@ -282,6 +240,7 @@ def main():
             processed_dataloader,
             processor,
             args.max_new_tokens,
+            benchmark_model,
         )
 
         # Run transplantation experiments
@@ -299,6 +258,7 @@ def main():
             processed_dataloader=processed_dataloader,
             processor=processor,
             max_new_tokens=args.max_new_tokens,
+            benchmark_func=benchmark_model,
         )
         end_time = time.time()
 
@@ -324,5 +284,41 @@ def main():
         print(f"{'=' * 80}\n")
 
 
-if __name__ == "__main__":
-    main()
+def create_common_parser() -> argparse.ArgumentParser:
+    """Create a common argument parser for transplantation benchmarking."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--multimodal_model_name_or_path", type=str, required=True)
+    parser.add_argument("--model_cache_dir", type=str, required=True)
+    parser.add_argument("--pretrained_projector_name_or_path", type=str, required=True)
+    parser.add_argument("--language_model_name_or_path", type=str, required=True)
+    parser.add_argument(
+        "--transplantation_method",
+        type=str,
+        required=True,
+        choices=["sliding_window", "two_parts"],
+    )
+    parser.add_argument("--stride", type=int, default=2, 
+                       help="Stride value for transplantation methods")
+    parser.add_argument("--window_size", type=int, default=2,
+                       help="Window size for sliding_window method (ignored for two_parts)")
+    parser.add_argument("--batch_size", type=int, default=25)
+    parser.add_argument("--max_new_tokens", type=int, default=10)
+    parser.add_argument("--results_dir", type=str, required=True)
+    parser.add_argument("--dataset_path_or_name", type=str, required=True)
+    parser.add_argument("--seed", type=int, default=42)
+    return parser
+
+
+def setup_transplantation_methods(args: argparse.Namespace) -> None:
+    """Setup transplantation methods configuration based on command line arguments."""
+    global TRANSPLANTATION_WEIGHTS_METHODS
+    
+    TRANSPLANTATION_WEIGHTS_METHODS = {
+        "sliding_window": {
+            "stride": args.stride,
+            "window_size": args.window_size,
+        },
+        "two_parts": {
+            "stride": args.stride,
+        },
+    } 

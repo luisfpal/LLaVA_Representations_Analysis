@@ -5,6 +5,7 @@ from typing import Union, Tuple, List, Dict
 from dadapy.data import Data
 from anatome.similarity import svcca_distance
 from tqdm import tqdm
+import torch.nn.functional as F
 
 
 def _ensure_device(
@@ -944,3 +945,35 @@ def compute_heads_projection_residual_stream_similarities(
             last_update = head_idx + 1
     progress_bar.close()
     return residual_stream_measures
+
+
+def compute_layers_cosine_similarity(
+    tensor1: torch.Tensor, 
+    tensor2: torch.Tensor
+) -> torch.Tensor:
+    """
+    Compute cosine similarity between two tensors across layers and return median similarity per layer.
+    
+    Args:
+        tensor1: First tensor of shape (layers, samples, hidden_dim)
+        tensor2: Second tensor of shape (layers, samples, hidden_dim)
+    
+    Returns:
+        Tensor of shape (layers,) containing median cosine similarity for each layer
+    """
+    # Validate input shapes
+    if tensor1.shape != tensor2.shape:
+        raise ValueError(f"Tensors must have the same shape. Got {tensor1.shape} and {tensor2.shape}")
+    
+    if len(tensor1.shape) != 3:
+        raise ValueError(f"Expected 3D tensors, got shape {tensor1.shape}")
+    
+    # Compute cosine similarity using F.cosine_similarity
+    # Shape: (layers, samples)
+    cosine_similarities = F.cosine_similarity(tensor1, tensor2, dim=-1)
+    
+    # Compute median across samples for each layer
+    # Shape: (layers,)
+    median_similarities = torch.median(cosine_similarities, dim=1).values
+    
+    return median_similarities

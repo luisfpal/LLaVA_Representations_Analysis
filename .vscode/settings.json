@@ -13,4 +13,7 @@
     "VIRTUAL_ENV": "${workspaceFolder}/.venv"
   },
   "editor.formatOnSave": true,
+  "cursorpyright.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ],
 }

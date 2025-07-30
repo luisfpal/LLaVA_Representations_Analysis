@@ -5,7 +5,6 @@ uv.lock
 benchmarks_evaluation/
 .experiments_logs/
 old/
-.experiments_logs/
 notebooks/analyze_heads_representations.ipynb
 notebooks/plot_intrinsic_dimension.ipynb
 notebooks/plot_renyi_entropy.ipynb

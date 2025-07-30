@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script runs layer transplantation benchmarking
+# This script runs layer transplantation benchmarking for captioning tasks
 
 # --- Configuration Section ---
 MULTIMODAL_MODEL_NAME_OR_PATH="llava-hf/llava-1.5-7b-hf"
@@ -12,10 +12,12 @@ DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 # Transplantation configuration
 # TRANSPLANTATION_METHOD="sliding_window"
 TRANSPLANTATION_METHOD="two_parts"
+STRIDE="2"
+WINDOW_SIZE="2"
 
 # Benchmarking parameters
 BATCH_SIZE="10"
-MAX_NEW_TOKENS="10"
+MAX_NEW_TOKENS="50"
 SEED="42"
 
 # Directory configuration
@@ -24,7 +26,7 @@ RESULTS_DIR="$PROJECT_DIR/results"
 MODEL_CACHE_DIR="$HOME/scratch/huggingface/hub"
 
 # Script configuration
-FILENAME="transplanting_layers_benchmarking.py"
+FILENAME="transplanting_layers_caption_benchmarking.py"
 FILEPATH="$PROJECT_DIR/scripts/$FILENAME"
 
 # --- Argument Construction ---
@@ -34,6 +36,8 @@ SCRIPT_ARGS+=(--model_cache_dir "$MODEL_CACHE_DIR")
 SCRIPT_ARGS+=(--pretrained_projector_name_or_path "$PRETRAINED_PROJECTOR_NAME_OR_PATH")
 SCRIPT_ARGS+=(--language_model_name_or_path "$LANGUAGE_MODEL_NAME_OR_PATH")
 SCRIPT_ARGS+=(--transplantation_method "$TRANSPLANTATION_METHOD")
+SCRIPT_ARGS+=(--stride "$STRIDE")
+SCRIPT_ARGS+=(--window_size "$WINDOW_SIZE")
 SCRIPT_ARGS+=(--batch_size "$BATCH_SIZE")
 SCRIPT_ARGS+=(--max_new_tokens "$MAX_NEW_TOKENS")
 SCRIPT_ARGS+=(--results_dir "$RESULTS_DIR")
@@ -51,12 +55,14 @@ fi
 mkdir -p "$RESULTS_DIR"
 
 # Print configuration
-echo "====== Transplanting Layers Benchmarking Configuration ======"
+echo "====== Transplanting Layers Captioning Benchmarking Configuration ======"
 echo "Multimodal model: $MULTIMODAL_MODEL_NAME_OR_PATH"
 echo "Language model: $LANGUAGE_MODEL_NAME_OR_PATH"
 echo "Pretrained projector: $PRETRAINED_PROJECTOR_NAME_OR_PATH"
 echo "Dataset: $DATASET_PATH_OR_NAME"
 echo "Transplantation method: $TRANSPLANTATION_METHOD"
+echo "Stride: $STRIDE"
+echo "Window size: $WINDOW_SIZE"
 echo "Results directory: $RESULTS_DIR"
 echo "Model cache directory: $MODEL_CACHE_DIR"
 echo "Batch size: $BATCH_SIZE"
@@ -65,7 +71,7 @@ echo "Seed: $SEED"
 echo "==============================="
 
 # Run benchmarking
-echo -e "\n====== Running Transplanting Layers Benchmarking ======"
+echo -e "\n====== Running Transplanting Layers Captioning Benchmarking ======"
 
 # Set PyTorch memory config
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -73,5 +79,5 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # Run the command
 TOKENIZERS_PARALLELISM=false python "${DEBUGGER_ARGS[@]}" "${FILEPATH}" "${SCRIPT_ARGS[@]}"
 
-echo -e "\n====== Benchmarking Complete ======"
-echo "Results saved to: $RESULTS_DIR"
+echo -e "\n====== Captioning Benchmarking Complete ======"
+echo "Results saved to: $RESULTS_DIR" 

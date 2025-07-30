@@ -182,6 +182,7 @@ def eval_model(args: argparse.Namespace):
         )
 
         # Add padding token if processing a batch
+        # todo: remove this, load_hf_model_and_processor_or_tokenizer always adds the padding token
         if args.batch_size > 1:
             if args.text_model:
                 processor.padding_side = "left"

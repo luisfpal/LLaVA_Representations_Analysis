@@ -16,7 +16,7 @@ PROJECT_ROOT="$HOME/multimodal_finetuned_representations"
 LOG_DIR="$PROJECT_ROOT/.experiments_logs"
 mkdir -p "$LOG_DIR"
 
-SCRIPT="transplanting_layers_benchmarking.sh"
+SCRIPT="transplanting_layers_caption_benchmarking.sh"
 
 # ====================== SBATCH Script Creation ====================== #
 SBATCH_SCRIPT=$(mktemp /tmp/sbatch_experiment.XXXXXX.sh)

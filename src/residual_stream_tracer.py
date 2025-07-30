@@ -9,11 +9,11 @@ from tqdm import tqdm
 from rich import print
 from transformers.feature_extraction_utils import BatchFeature
 from torch.utils.data import DataLoader
-from utils import ModelType, ProcessorType
+from utils import ModelType, sample_image_and_text_positions
 
 # Constants for valid parameter values
 VALID_RESIDUAL_STREAM_TYPES = ["output_layer", "post_mlp", "heads_projection"]
-VALID_TOKENS_POOLING_METHODS = ["mean", "last", None]
+VALID_TOKENS_POOLING_METHODS = ["mean", "last", "none", "sample"]
 
 
 class ResidualStreamTracer(abc.ABC):
@@ -31,14 +31,15 @@ class ResidualStreamTracer(abc.ABC):
         model: ModelType,
         num_samples: int,
         return_dtype: torch.dtype = torch.float16,
-        tokens_pooling_method: Optional[str] = "mean",
+        tokens_pooling_method: Optional[str] = "last",
+        embeddings_sampling_args: Optional[dict] = None,
     ):
         """
         Args:
             model (ModelType): huggingface multimodal decoder-based model
             num_samples (int): number of samples to trace, e.g. number of samples in the dataset
             return_dtype (torch.dtype, optional): dtype of the residual stream. Defaults to torch.float16.
-            tokens_pooling_method (Optional[str], optional): method to pool the tokens. Defaults to "mean".
+            tokens_pooling_method (Optional[str], optional): method to pool the tokens. Defaults to "last".
                 This is relatively memory lightweight and fast.
                 If None, the residual stream is returned as is but this is memory intensive.
                 This is used to compute the prompt entropy and the extraction is very fast but the memory is bounded by
@@ -46,9 +47,14 @@ class ResidualStreamTracer(abc.ABC):
                 !For example, for a model with 32 layers, 4096 hidden size, max sequence length of 678, 2500 samples,
                 !and float16 dtype, the memory is bounded by 2500 * 32 * 678 * 4096 * 2 ~ 414 GB.
                 Therefore, unless necessary and there is enough memory, using tokens_pooling_method=None is not recommended.
+            embeddings_sampling_args (Optional[dict], optional): arguments for sampling embeddings from specific positions.
+                If provided, this overrides tokens_pooling_method and samples embeddings from specific image/text positions.
+                Expected keys: 'image_token_id', 'image_seq_length', 'pad_token_id', 'text_direction',
+                'skip_image_pos', 'skip_text_pos', 'generator'.
         """
         self.model = model
         self.tokens_pooling_method = tokens_pooling_method
+        self.embeddings_sampling_args = embeddings_sampling_args
         self.num_layers = self.model.language_model.config.num_hidden_layers
         self.hidden_size = self.model.language_model.config.hidden_size
         self.counter = 0
@@ -57,17 +63,63 @@ class ResidualStreamTracer(abc.ABC):
         self.num_tokens = 0
 
         # Validate tokens_pooling_method
-        if tokens_pooling_method not in ["mean", "last", None]:
-            raise ValueError("tokens_pooling_method must be 'last', 'mean', or None")
+        if tokens_pooling_method not in VALID_TOKENS_POOLING_METHODS:
+            raise ValueError(
+                f"tokens_pooling_method must be one of {VALID_TOKENS_POOLING_METHODS}"
+            )
+
+        # Sanity check
+        if tokens_pooling_method == "sample" and embeddings_sampling_args is None:
+            raise ValueError(
+                "embeddings_sampling_args must be provided when tokens_pooling_method is 'sample'"
+            )
+
+        self._validate_embeddings_sampling_args()
 
         print(
-            f"The residual stream is extracted with dtype {self.return_dtype}. "
-            "The precision and comparison of extracting the residual stream depends on the dtype of the residual stream. "
-            "Loading the model and extracting the residual stream with torch.float32 gives high precision "
-            "but is more memory intensive. Up to the precision determined by the dtype, the results are equivalent, "
-            "regardless of the batch size."
+            f"🔧 Residual stream extraction with dtype {self.return_dtype}. "
+            "Precision depends on dtype. torch.float32 gives high precision but is memory intensive. "
+            "Results are equivalent up to dtype precision regardless of batch size."
         )
 
+        self._calculate_memory_usage()
+        self._warn_memory_intensive_usage()
+
+        # Initialize storage - to be implemented by subclasses
+        self._initialize_storage()
+
+    def _validate_embeddings_sampling_args(self):
+        # If embeddings_sampling_args is provided, validate it
+        if self.embeddings_sampling_args is not None:
+            required_keys = [
+                "image_token_id",
+                "image_seq_length",
+                "pad_token_id",
+                "text_direction",
+                "skip_image_pos",
+                "skip_text_pos",
+                "generator",
+            ]
+            missing_keys = [
+                key for key in required_keys if key not in self.embeddings_sampling_args
+            ]
+            if missing_keys:
+                raise ValueError(
+                    f"embeddings_sampling_args missing required keys: {missing_keys}"
+                )
+            if (
+                self.embeddings_sampling_args.get("skip_image_pos")
+                and self.embeddings_sampling_args.get("skip_text_pos")
+            ):
+                raise ValueError("Cannot skip both image and text positions")
+            elif (
+                not self.embeddings_sampling_args.get("skip_image_pos")
+                and not self.embeddings_sampling_args.get("skip_text_pos")
+            ):
+                raise ValueError("Must skip either image or text positions")
+
+    def _calculate_memory_usage(self):
+        """Calculate memory usage per token for the tracer."""
         self.memory_usage_per_token = (
             self.num_layers
             * self.num_samples
@@ -75,17 +127,15 @@ class ResidualStreamTracer(abc.ABC):
             * self._dtype_size(self.return_dtype)
             / 1024**3
         )
-        # Warn the user that this tracer is extremely memory intensive
-        if tokens_pooling_method is None:
+
+    def _warn_memory_intensive_usage(self):
+        """Warn about memory intensive usage when appropriate."""
+        if self.tokens_pooling_method == "none":
             print(
                 "⚠️ Warning: This tracer is extremely memory intensive. "
-                "Please make sure that this is extremely necessary or that you have enough memory. "
-                "This may take a couple of GBs to hundreds of GBs of memory. "
-                "Consider counting the number of tokens in the dataset and multiplying by the memory usage per token."
+                "May require hundreds of GBs of memory. "
+                "Consider counting tokens in dataset and multiplying by memory usage per token."
             )
-
-        # Initialize storage - to be implemented by subclasses
-        self._initialize_storage()
 
     @abc.abstractmethod
     def _initialize_storage(self):
@@ -95,28 +145,48 @@ class ResidualStreamTracer(abc.ABC):
     def _dtype_size(self, dtype: torch.dtype) -> int:
         return torch.tensor([], dtype=dtype).element_size()
 
+    def _sample_embeddings_from_positions(
+        self, hidden_states: torch.Tensor
+    ) -> torch.Tensor:
+        """Sample embeddings from specific image/text positions."""
+        positions = sample_image_and_text_positions(
+            input_ids=self.current_batch_input_ids,
+            **self.embeddings_sampling_args,
+        )
+
+        # Two positions per batch element (image and text)
+        batch_indices = torch.arange(
+            hidden_states.shape[0], device=hidden_states.device
+        )
+        # Take the first position (image) if both are sampled, otherwise use the single position
+        return hidden_states[batch_indices, positions]
+
     def _pool_tokens(
         self,
         hidden_states: torch.Tensor,
-        tokens_pooling_method: Optional[str] = None,
-        pooling_dim: int = 1,
+        embedding_position: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Pool the tokens of the hidden states.
+        Pool the tokens of the hidden states, one sample at a time.
 
         Args:
             hidden_states: Input tensor to pool
-            tokens_pooling_method: Method to use for pooling ('mean', 'last', or None)
-            pooling_dim: Dimension along which to pool for mean pooling
-
+            embedding_position: Position of the embedding to sample.
         Returns:
             Pooled tensor or original tensor if no pooling
         """
-        if tokens_pooling_method == "mean":
-            return hidden_states.mean(dim=pooling_dim)
-        elif tokens_pooling_method == "last":
+        if self.tokens_pooling_method == "sample" and embedding_position is None:
+            raise ValueError("embedding_position must be provided when tokens_pooling_method is 'sample'")
+        ndims = hidden_states.ndim
+        if self.tokens_pooling_method == "mean":
+            if ndims == 3:
+                return hidden_states.mean(dim=1) # (layers, hidden_size)
+            elif ndims == 2:
+                return hidden_states.mean(dim=0) # (hidden_size)
+            else:
+                raise ValueError(f"Unsupported tensor dimensions for mean pooling: {ndims}")
+        elif self.tokens_pooling_method == "last":
             # Handle different tensor shapes for last token pooling
-            ndims = hidden_states.ndim
             if ndims == 2:
                 return hidden_states[-1, :]
             elif ndims == 3:
@@ -125,10 +195,21 @@ class ResidualStreamTracer(abc.ABC):
                 raise ValueError(
                     f"Unsupported tensor dimensions for last token pooling: {ndims}"
                 )
-        elif tokens_pooling_method is None:
+        elif self.tokens_pooling_method == "none":
             return hidden_states
+        elif self.tokens_pooling_method == "sample":
+            # case 1: (layers, seq_len(idx), hidden_size) or (num_heads, seq_len(idx), hidden_size)
+            if ndims == 3:
+                return hidden_states[:, embedding_position, :]
+            # case 2: (seq_len(idx), hidden_size)
+            elif ndims == 2:
+                return hidden_states[embedding_position, :]
+            else:
+                raise ValueError(f"Unsupported tensor dimensions for sampling: {hidden_states.ndim}")
         else:
-            raise ValueError(f"Invalid tokens pooling method: {tokens_pooling_method}")
+            raise ValueError(
+                f"Invalid tokens pooling method: {self.tokens_pooling_method}"
+            )
 
     @abc.abstractmethod
     def trace_batch(self, batch_inputs: BatchFeature):
@@ -144,12 +225,12 @@ class ResidualStreamTracer(abc.ABC):
         """
         Get the residual stream of the model as a deepcopy of the internal residual stream.
         """
-        if self.tokens_pooling_method is None:
+        if self.tokens_pooling_method == "none":
             mean_tokens_per_sample = self.num_tokens / self.num_samples
             print(
-                f"\n🔎 The total number of tokens in the dataset is {self.num_tokens}."
-                f"\n📊 The mean number of tokens per sample is {mean_tokens_per_sample:.2f}."
-                f"\n💾 The total average memory usage is {mean_tokens_per_sample * self.memory_usage_per_token:.2f} GB."
+                f"\n🔎 Total tokens in dataset: {self.num_tokens}"
+                f"\n📊 Mean tokens per sample: {mean_tokens_per_sample:.2f}"
+                f"\n💾 Estimated memory usage: {mean_tokens_per_sample * self.memory_usage_per_token:.2f} GB"
             )
 
         if return_deepcopy:
@@ -181,17 +262,25 @@ class HookBasedResidualStreamTracer(ResidualStreamTracer):
         num_samples: int,
         return_dtype: torch.dtype = torch.float16,
         tokens_pooling_method: Optional[str] = None,
+        embeddings_sampling_args: Optional[dict] = None,
     ):
         """
         Initialize hook-based tracer with additional hook management attributes.
         """
         # Initialize parent class first
-        super().__init__(model, num_samples, return_dtype, tokens_pooling_method)
+        super().__init__(
+            model,
+            num_samples,
+            return_dtype,
+            tokens_pooling_method,
+            embeddings_sampling_args,
+        )
 
         # Hook-specific attributes
         self.handles = []
         self.current_batch_start_idx = 0
         self.sequence_lengths = None
+        self.current_batch_embeddings_positions = None
 
         # Set up hooks after initialization
         self._trace()
@@ -222,8 +311,15 @@ class HookBasedResidualStreamTracer(ResidualStreamTracer):
             self.current_batch_start_idx = self.counter
 
             # Initialize storage for None pooling if needed
-            if self.tokens_pooling_method is None:
+            if self.tokens_pooling_method == "none":
                 self._initialize_none_pooling_storage(batch_length)
+
+            # Store input_ids for embeddings sampling if needed
+            if self.tokens_pooling_method == "sample":
+                self.current_batch_embeddings_positions = sample_image_and_text_positions(
+                    input_ids=batch_inputs.input_ids,
+                    **self.embeddings_sampling_args,
+                )
 
             # Increment counter for next batch
             self.counter += batch_length
@@ -240,6 +336,8 @@ class HookBasedResidualStreamTracer(ResidualStreamTracer):
         if hasattr(self, "sequence_lengths"):
             del self.sequence_lengths
         self.current_batch_start_idx = 0
+        if hasattr(self, "current_batch_embeddings_positions"):
+            del self.current_batch_embeddings_positions
 
         super().clear()
 
@@ -266,15 +364,22 @@ class ResidualStreamOutputLayerTracer(ResidualStreamTracer):
         num_samples: int,
         return_dtype: torch.dtype = torch.float16,
         tokens_pooling_method: Optional[str] = None,
+        embeddings_sampling_args: Optional[dict] = None,
     ):
-        super().__init__(model, num_samples, return_dtype, tokens_pooling_method)
+        super().__init__(
+            model,
+            num_samples,
+            return_dtype,
+            tokens_pooling_method,
+            embeddings_sampling_args,
+        )
         print(
             f"\nThe estimated memory usage per token is {self.memory_usage_per_token:.2f} GB"
         )
 
     def _initialize_storage(self):
         """Initialize storage for output residual stream."""
-        if self.tokens_pooling_method == "mean" or self.tokens_pooling_method == "last":
+        if self.tokens_pooling_method in ["mean", "last", "sample"]:
             self._residual_stream = torch.zeros(
                 self.num_layers,
                 self.num_samples,
@@ -282,7 +387,7 @@ class ResidualStreamOutputLayerTracer(ResidualStreamTracer):
                 device="cpu",
                 dtype=self.return_dtype,
             )
-        elif self.tokens_pooling_method is None:
+        elif self.tokens_pooling_method == "none":
             self._residual_stream = {
                 str(sample_idx): None for sample_idx in range(self.num_samples)
             }
@@ -295,6 +400,14 @@ class ResidualStreamOutputLayerTracer(ResidualStreamTracer):
         sequence_lengths = batch_inputs.attention_mask.sum(dim=1).to("cpu")
         batch_length = sequence_lengths.shape[0]
         self.num_tokens += sequence_lengths.sum().item()
+        
+        # Store input_ids for embeddings sampling if needed
+        embeddings_positions = None
+        if self.tokens_pooling_method == "sample":
+            embeddings_positions = sample_image_and_text_positions(
+                input_ids=batch_inputs.input_ids,
+                **self.embeddings_sampling_args,
+            ) # (B,)
 
         # Run forward pass with gradient tracking disabled
         with torch.no_grad():
@@ -309,6 +422,11 @@ class ResidualStreamOutputLayerTracer(ResidualStreamTracer):
 
             batch_residual_stream = []
             for idx in range(batch_length):
+                # Get the position of the embedding to sample
+                if self.tokens_pooling_method == "sample":
+                    embedding_position = embeddings_positions[idx]
+                else:
+                    embedding_position = None
                 batch_residual_stream.append(
                     self._pool_tokens(
                         torch.stack(
@@ -320,15 +438,14 @@ class ResidualStreamOutputLayerTracer(ResidualStreamTracer):
                             ],
                             dim=0,
                         ),  # shape: (num_layers, sequence_length(idx), hidden_size)
-                        self.tokens_pooling_method,
-                        pooling_dim=1,  # here it only applies for tokens_pooling_method = "mean"
+                        embedding_position=embedding_position,
                     ).to(device="cpu", dtype=self.return_dtype)
                     # batch_length list of tensors of shape
                     # (num_layers, sequence_length(idx), hidden_size) or
                     # (num_layers, hidden_size)
                 )
 
-            if self.tokens_pooling_method is not None:
+            if self.tokens_pooling_method != "none":
                 # tensor of shape (num_layers, batch_length, hidden_size)
                 batch_residual_stream = torch.stack(batch_residual_stream, dim=1)
                 self._residual_stream[
@@ -370,15 +487,22 @@ class ResidualStreamPostMLPTracer(HookBasedResidualStreamTracer):
         num_samples: int,
         return_dtype: torch.dtype = torch.float16,
         tokens_pooling_method: Optional[str] = None,
+        embeddings_sampling_args: Optional[dict] = None,
     ):
-        super().__init__(model, num_samples, return_dtype, tokens_pooling_method)
+        super().__init__(
+            model,
+            num_samples,
+            return_dtype,
+            tokens_pooling_method,
+            embeddings_sampling_args,
+        )
         print(
             f"\nThe estimated memory usage per token is {self.memory_usage_per_token:.2f} GB"
         )
 
     def _initialize_storage(self):
         """Initialize storage for post-MLP residual stream."""
-        if self.tokens_pooling_method == "mean" or self.tokens_pooling_method == "last":
+        if self.tokens_pooling_method in ["mean", "last", "sample"]:
             self._residual_stream = torch.zeros(
                 self.num_layers,
                 self.num_samples,
@@ -386,7 +510,7 @@ class ResidualStreamPostMLPTracer(HookBasedResidualStreamTracer):
                 device="cpu",
                 dtype=self.return_dtype,
             )
-        elif self.tokens_pooling_method is None:
+        elif self.tokens_pooling_method == "none":
             self._residual_stream = {
                 str(sample_idx): None for sample_idx in range(self.num_samples)
             }
@@ -411,19 +535,23 @@ class ResidualStreamPostMLPTracer(HookBasedResidualStreamTracer):
 
             batch_residual_stream = []
             for idx in range(batch_length):
+                # Get the position of the embedding to sample
+                if self.tokens_pooling_method == "sample":
+                    embedding_position = self.current_batch_embeddings_positions[idx]
+                else:
+                    embedding_position = None
                 batch_residual_stream.append(
                     self._pool_tokens(
                         # shape: (seq_len(idx), hidden_size_out)
                         x[idx, -self.sequence_lengths[idx] :, :],
-                        self.tokens_pooling_method,
-                        pooling_dim=0,  # here it only applies for tokens_pooling_method = "mean"
+                        embedding_position=embedding_position,
                     ).to(device="cpu", dtype=self.return_dtype)
                 )
                 # list of batch_length tensors of shape
                 # (hidden_size,) or
                 # (seq_len(idx), hidden_size) for layer_idx
 
-            if self.tokens_pooling_method is not None:
+            if self.tokens_pooling_method != "none":
                 # tensor of shape: (batch, hidden_size)
                 batch_residual_stream = torch.stack(batch_residual_stream, dim=0)
                 start_idx = self.current_batch_start_idx
@@ -446,7 +574,7 @@ class ResidualStreamPostMLPTracer(HookBasedResidualStreamTracer):
 
     def _trace(self):
         """Set up hooks for all target layers with pre-computation."""
-        print("Setting up hooks...")
+        print("🔗 Setting up hooks...")
         for layer_idx in range(self.num_layers):
             mlp = self.model.language_model.model.layers[layer_idx].mlp
 
@@ -485,6 +613,7 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
         num_samples: int,
         return_dtype: torch.dtype = torch.float16,
         tokens_pooling_method: Optional[str] = None,
+        embeddings_sampling_args: Optional[dict] = None,
     ):
         """
         Initialize heads projection tracer with additional attention head attributes.
@@ -494,8 +623,15 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
         self.head_dim = model.language_model.config.hidden_size // self.num_heads
 
         # Initialize parent class
-        super().__init__(model, num_samples, return_dtype, tokens_pooling_method)
+        super().__init__(
+            model,
+            num_samples,
+            return_dtype,
+            tokens_pooling_method,
+            embeddings_sampling_args,
+        )
 
+        # Override memory calculation for heads projection
         self.memory_usage_per_token = (
             self.num_layers
             * self.num_samples
@@ -509,17 +645,15 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
         )
 
         # Prevent memory issues
-        if tokens_pooling_method is None:
+        if tokens_pooling_method == "none":
             raise ValueError(
-                "\n⛔ Using tokens_pooling_method=None is extremely memory intensive for this tracer."
-                "Please make sure that this is extremely necessary or that you have enough memory."
-                "Estimate the memory usage per token by multiplying the number of tokens in the dataset"
-                "by the memory usage per token."
+                "⛔ Using tokens_pooling_method=None is extremely memory intensive for this tracer. "
+                "Estimate memory usage by multiplying dataset tokens by memory usage per token."
             )
 
     def _initialize_storage(self):
         """Initialize storage for heads projection residual stream."""
-        if self.tokens_pooling_method == "mean" or self.tokens_pooling_method == "last":
+        if self.tokens_pooling_method in ["mean", "last", "sample"]:
             self._residual_stream = torch.zeros(
                 self.num_layers,
                 self.num_samples,
@@ -528,7 +662,7 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
                 device="cpu",
                 dtype=self.return_dtype,
             )
-        elif self.tokens_pooling_method is None:
+        elif self.tokens_pooling_method == "none":
             self._residual_stream = {
                 str(sample_idx): None for sample_idx in range(self.num_samples)
             }
@@ -613,21 +747,26 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
 
             batch_projections = []
             for idx in range(batch_length):
+                # Get the position of the embedding to sample
+                if self.tokens_pooling_method == "sample":
+                    embedding_position = self.current_batch_embeddings_positions[idx]
+                else:
+                    embedding_position = None
+                
                 # shape: (num_heads, max_seq_len, hidden_size_out)
                 # -> (num_heads, hidden_size_out) or
                 # (num_heads, seq_len(idx), hidden_size_out)
                 batch_projections.append(
                     self._pool_tokens(
                         projections[idx, :, -self.sequence_lengths[idx] :, :],
-                        self.tokens_pooling_method,
-                        pooling_dim=1,  # here it only applies for tokens_pooling_method = "mean"
+                        embedding_position=embedding_position,
                     ).to(device="cpu", dtype=self.return_dtype)
                 )
                 # list of batch_length tensors of shape
                 # (num_heads, hidden_size_out) or
                 # (num_heads, seq_len(idx), hidden_size_out) for layer_idx
 
-            if self.tokens_pooling_method is not None:
+            if self.tokens_pooling_method != "none":
                 # tensor of shape: (batch, num_heads, hidden_size_out)
                 batch_projections = torch.stack(batch_projections, dim=0)
                 # Calculate the correct start index for this batch
@@ -651,7 +790,7 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
 
     def _trace(self):
         """Set up hooks for all target layers with pre-computation."""
-        print("Setting up hooks...")
+        print("🔗 Setting up hooks...")
         for layer_idx in range(self.num_layers):
             o_proj = self.model.language_model.model.layers[layer_idx].self_attn.o_proj
 
@@ -664,7 +803,7 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
 
         total_heads = self.num_heads * self.num_layers
         print(
-            f"Hooks registered for {total_heads} heads across {self.num_layers} layers"
+            f"✅ Hooks registered for {total_heads} heads across {self.num_layers} layers"
         )
 
     def clear(self):
@@ -679,14 +818,14 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
 
 def residual_stream_tracer(
     model: ModelType,
-    processor: ProcessorType,
     processed_dataloader: DataLoader,
     return_dtype: torch.dtype = torch.float16,
-    tokens_pooling_method: Optional[Literal["mean", "last", "none"]] = "mean",
+    tokens_pooling_method: Optional[Literal["mean", "last", "none", "sample"]] = "last",
     residual_stream_type: Literal[
         "output_layer", "post_mlp", "heads_projection"
     ] = "output_layer",
     return_deepcopy: bool = True,
+    embeddings_sampling_args: Optional[dict] = None,
 ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
     """
     Extract the residual stream of a huggingface multimodal decoder-based,
@@ -716,14 +855,17 @@ def residual_stream_tracer(
 
     Args:
         model (ModelType): huggingface multimodal decoder-based model
-        processor (ProcessorType): processor to tokenize the inputs
         processed_dataloader (DataLoader): processed dataloader to iterate over the dataset
         return_dtype (torch.dtype, optional): dtype of the residual stream. Defaults to torch.float16.
-        tokens_pooling_method (Optional[Literal["mean", "last", "none"]], optional): method to pool the tokens. Defaults to "mean".
+        tokens_pooling_method (Optional[Literal["mean", "last", "none", "sample"]], optional): method to pool the tokens. Defaults to "last".
         residual_stream_type (str, optional): type of the residual stream. Defaults to "output_layer".
         return_deepcopy (bool, optional): whether to return a deepcopy of the residual stream.
             Defaults to True, which deletes the tracer and intermediate variables.
             If False, the residual stream is returned as is, and the tracer is not deleted.
+        embeddings_sampling_args (Optional[dict], optional): arguments for sampling embeddings from specific positions.
+            If provided, this overrides tokens_pooling_method and samples embeddings from specific image/text positions.
+            Expected keys: 'image_token_id', 'image_seq_length', 'pad_token_id', 'text_direction',
+            'skip_image_pos', 'skip_text_pos', 'generator'.
 
     Returns:
         Union[torch.Tensor, Dict[str, torch.Tensor]]: residual stream of the model
@@ -749,7 +891,6 @@ def residual_stream_tracer(
         )
 
     # Extract dataset info with validation
-    batch_size = processed_dataloader.batch_size
     dataset_size = len(processed_dataloader.dataset)
 
     if dataset_size == 0:
@@ -759,19 +900,17 @@ def residual_stream_tracer(
 
     print("\n" + "-" * 80)
     print(
-        f"Tracing residual stream of type {residual_stream_type} with tokens pooling method: {tokens_pooling_method}"
+        f"🔍 Tracing residual stream: {residual_stream_type} with {tokens_pooling_method} pooling"
     )
     print("-" * 80)
 
     # Initialize the appropriate tracer based on residual_stream_type
-    tokens_pooling_method = (
-        None if tokens_pooling_method == "none" else tokens_pooling_method
-    )
     tracer_kwargs = {
         "model": model,
         "num_samples": dataset_size,
         "tokens_pooling_method": tokens_pooling_method,
         "return_dtype": return_dtype,
+        "embeddings_sampling_args": embeddings_sampling_args,
     }
 
     if residual_stream_type == "output_layer":
@@ -781,19 +920,12 @@ def residual_stream_tracer(
     elif residual_stream_type == "heads_projection":
         tracer = ResidualStreamHeadsProjectionTracer(**tracer_kwargs)
 
-    # Configure padding for batch processing if needed
-    if batch_size > 1:
-        processor.tokenizer.padding_side = "left"
-        if processor.tokenizer.pad_token is None:
-            processor.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-            model.language_model.resize_token_embeddings(len(processor.tokenizer))
-
     # Initialize progress tracking variables
     samples_processed = 0
     update_count = 0
     update_every = max(1, int(0.1 * dataset_size))
 
-    print(f"Processing {dataset_size} samples...")
+    print(f"📊 Processing {dataset_size} samples...")
     progress_bar = tqdm(
         total=dataset_size,
         desc="Extracting residual stream",
@@ -834,7 +966,7 @@ def residual_stream_tracer(
 
     print("\n" + "-" * 80)
     print(
-        f"Residual stream extracted successfully in ⌛ {(end_time - start_time) / 60:.2f} minutes"
+        f"✅ Residual stream extracted successfully in ⌛ {(end_time - start_time) / 60:.2f} minutes"
     )
     print("-" * 80 + "\n")
 

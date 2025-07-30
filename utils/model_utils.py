@@ -10,7 +10,7 @@ from transformers import (
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
     AutoTokenizer,
-    LlamaForCausalLM,
+    # LlamaForCausalLM,
     # LlamaTokenizerFast
 )
 from huggingface_hub import snapshot_download
@@ -161,7 +161,20 @@ def load_hf_model_and_processor_or_tokenizer(
         return processor
     elif skip_processor:
         return model
-
+    
+    if hasattr(processor, "padding_side"):
+        processor.padding_side = "left"
+        if processor.pad_token is None:
+            processor.add_special_tokens({"pad_token": "[PAD]"})
+            model.resize_token_embeddings(len(processor))
+    elif hasattr(processor, "tokenizer") and hasattr(model, "language_model"):
+        processor.tokenizer.padding_side = "left"
+        if processor.tokenizer.pad_token is None:
+            processor.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+            model.language_model.resize_token_embeddings(len(processor.tokenizer))
+    else:
+        raise ValueError(f"Processor/tokenizer {processor} has no padding_side attribute and model {model} has no language_model attribute.")
+    
     return model, processor
 
 

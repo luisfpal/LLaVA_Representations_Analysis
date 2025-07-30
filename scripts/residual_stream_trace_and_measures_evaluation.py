@@ -114,7 +114,7 @@ def validate_combination(residual_stream_type: str, tokens_pooling_method: str) 
         True if combination is valid, False otherwise
     """
     # These combinations are not supported due to memory constraints
-    if residual_stream_type in ["heads_projection"] and tokens_pooling_method == "none":
+    if residual_stream_type == "heads_projection" and tokens_pooling_method == "none":
         return False
     return True
 
@@ -240,49 +240,42 @@ def main():
     results_dir = os.path.expanduser(args.results_dir)
 
     print(
-        f"Processing {len(residual_stream_types)} residual stream types: {residual_stream_types}"
+        f"🔧 Processing {len(residual_stream_types)} residual stream types: {residual_stream_types}"
     )
     print(
-        f"Processing {len(tokens_pooling_methods)} token pooling methods: {tokens_pooling_methods}"
+        f"🔧 Processing {len(tokens_pooling_methods)} token pooling methods: {tokens_pooling_methods}"
     )
+
     count = 0
     num_combinations = (
         len(residual_stream_types) * len(tokens_pooling_methods) * len(DATASETS)
     )
+
     # Process each combination of residual stream type and token pooling method
     for residual_stream_type in residual_stream_types:
         for tokens_pooling_method in tokens_pooling_methods:
             # Validate combination feasibility
             if not validate_combination(residual_stream_type, tokens_pooling_method):
                 print(
-                    f"Skipping invalid combination: {residual_stream_type} + {tokens_pooling_method} ❌"
+                    f"⏭️ Skipping invalid combination: {residual_stream_type} + {tokens_pooling_method}"
                 )
                 continue
 
             print(f"\n{'=' * 80}")
             print(
-                f"Processing: {residual_stream_type} residual stream type with {tokens_pooling_method} pooling method 🔍"
+                f"🔍 Processing: {residual_stream_type} with {tokens_pooling_method} pooling"
             )
-            print(f"{'=' * 80}\n")
+            print(f"{'=' * 80}")
 
             start_time = time.time()
-
-            # Convert "none" string to None for internal processing
-            pooling_method = (
-                None if tokens_pooling_method == "none" else tokens_pooling_method
-            )
 
             # Determine if we need deep copy (only False for "none" pooling to save memory)
             return_deepcopy = tokens_pooling_method != "none"
 
             for dataset_name, dataset_args in DATASETS.items():
-                print(f"{'*' * 80}")
-                print(f"Processing dataset: {dataset_name} 📊")
-                print(f"{'*' * 80}")
-
-                # the dataloader is loaded inside the models loop
-                # because the residual stream tracer uses a processed dataloader
-                # todo: redesign the interface if used in the future
+                print(f"\n{'*' * 60}")
+                print(f"📊 Processing dataset: {dataset_name}")
+                print(f"{'*' * 60}")
 
                 # Initialize storage for model residual streams
                 residual_stream_multimodal_model = None
@@ -300,9 +293,9 @@ def main():
 
                 # Process each model configuration
                 for model_key, model_args in MODELS.items():
-                    print(f"\n{'+' * 80}")
-                    print(f"Processing model: {model_key} 🤖")
-                    print(f"{'+' * 80}\n")
+                    print(f"\n{'+' * 60}")
+                    print(f"🤖 Processing model: {model_key}")
+                    print(f"{'+' * 60}")
 
                     # Generate model identifier and create output directory
                     model_identifier = get_model_identifier(model_args)
@@ -335,15 +328,14 @@ def main():
                     # Extract residual stream
                     residual_stream = residual_stream_tracer(
                         model=model,
-                        processor=processor,
                         processed_dataloader=processed_dataloader,
                         residual_stream_type=residual_stream_type,
-                        tokens_pooling_method=pooling_method,
+                        tokens_pooling_method=tokens_pooling_method,
                         return_deepcopy=return_deepcopy,
                     )
 
                     # Store residual streams for similarity computation (only when pooling method is not None)
-                    if pooling_method is not None:
+                    if tokens_pooling_method != "none":
                         if model_key == "multimodal_model":
                             residual_stream_multimodal_model = residual_stream
                         elif model_key == "multimodal_model_pretrained_connector":
@@ -353,9 +345,9 @@ def main():
 
                     # Compute intrinsic dimension and entropy measures for layer-wise extractions
                     if residual_stream_type in ["output_layer", "post_mlp"]:
-                        if pooling_method is not None:
+                        if tokens_pooling_method != "none":
                             # Compute intrinsic dimension (only for pooled data)
-                            print("Computing intrinsic dimension... 🧮")
+                            print("🧮 Computing intrinsic dimension...")
                             layers_intrinsic_dimension = (
                                 compute_layers_intrinsic_dimension(
                                     residual_stream,
@@ -375,7 +367,7 @@ def main():
                             )
 
                             # Compute dataset entropy (only for pooled data)
-                            print("Computing dataset entropy... 📊")
+                            print("📊 Computing dataset entropy...")
                             layers_dataset_entropy = (
                                 compute_layers_residual_stream_entropy(
                                     residual_stream,
@@ -391,7 +383,7 @@ def main():
                             )
                         else:
                             # Compute prompt entropy (only for non-pooled data)
-                            print("Computing prompt entropy... 📊")
+                            print("📊 Computing prompt entropy...")
                             layers_prompt_entropy = (
                                 compute_layers_residual_stream_entropy(
                                     residual_stream,
@@ -406,7 +398,7 @@ def main():
                                 ),
                             )
 
-                    if pooling_method is None:
+                    if tokens_pooling_method == "none":
                         del residual_stream
 
                     # Clean up model from memory
@@ -415,9 +407,9 @@ def main():
                     torch.cuda.empty_cache()
 
                 # Skip similarity computation when pooling method is None
-                if pooling_method is not None:
+                if tokens_pooling_method != "none":
                     # Compute similarity measures between models
-                    print("Computing similarity measures between models... 🤝")
+                    print("🤝 Computing similarity measures between models...")
                     if residual_stream_type == "heads_projection":
                         compute_residual_stream_similarities = (
                             compute_heads_projection_residual_stream_similarities
@@ -447,31 +439,30 @@ def main():
                     )
 
                 # Clean up residual streams from memory (only if they were stored)
-                if pooling_method is not None:
+                if tokens_pooling_method != "none":
                     del (
                         residual_stream_multimodal_model,
                         residual_stream_multimodal_model_pretrained_connector,
                     )
                 gc.collect()
                 torch.cuda.empty_cache()
-                print(f"\n{'+-' * 40}")
+
                 count += 1
-                print(
-                    f"Progress computing similarity measures: {count}/{num_combinations} combinations completed ✅"
-                )
-                print(f"{'+-' * 40}\n")
+                print(f"\n{'+-' * 30}")
+                print(f"✅ Progress: {count}/{num_combinations} combinations completed")
+                print(f"{'+-' * 30}")
 
             end_time = time.time()
-            print(f"\n{'+-' * 40}")
+            print(f"\n{'+-' * 30}")
             print(
-                f"Combination {residual_stream_type} + {tokens_pooling_method} completed in ⌛ {(end_time - start_time) / 60:.2f} minutes"
+                f"✅ Combination {residual_stream_type} + {tokens_pooling_method} completed in ⌛ {(end_time - start_time) / 60:.2f} minutes"
             )
-            print(f"{'+-' * 40}\n")
+            print(f"{'+-' * 30}")
 
     print(f"\n{'=' * 80}")
-    print("Analysis completed successfully! 🎉")
-    print(f"Results saved to: {results_dir}")
-    print(f"{'=' * 80}\n")
+    print("🎉 Analysis completed successfully!")
+    print(f"📁 Results saved to: {results_dir}")
+    print(f"{'=' * 80}")
 
 
 if __name__ == "__main__":

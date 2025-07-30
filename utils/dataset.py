@@ -12,9 +12,11 @@ from .constants import (
     SYSTEM_ROLE,
     ASSISTANT_ROLE,
     ANSWER_TEXT,
+    SHORT_CAPTION_PROMPT,
 )
 from PIL import Image
 import argparse
+from functools import partial
 
 
 MULTIPLE_CHOICE_BENCHMARKS = ["mmlu", "scienceqa"]
@@ -308,6 +310,61 @@ class OpenVQADataset(Dataset):
         return sample
 
 
+class ImageCaptioningDataset(Dataset):
+    """
+    Dataset for captioning datasets.
+    Unnecessary to load it as a class but used for simplicity.
+
+    Args:
+        dataset_path_or_name: Path to the dataset directory or Hugging Face dataset identifier.
+        downsample_size: Maximum number of samples to use
+        seed: Random seed for reproducibility
+    """
+
+    def __init__(
+        self,
+        dataset_path_or_name: str,
+        downsample_size: Optional[int] = None,
+        seed: int = 42,
+    ):
+        dataset_dir = os.path.expanduser(dataset_path_or_name)
+
+        if not os.path.exists(dataset_dir):
+            raise FileNotFoundError(f"Dataset directory not found: {dataset_dir}")
+
+        try:
+            # Load the initial dataset
+            dataset = load_from_disk(dataset_dir)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load dataset from {dataset_dir}: {e}")
+
+        # Apply downsampling if requested and if dataset is larger than requested size
+        if downsample_size and downsample_size < len(dataset):
+            print(
+                f"Downsampling dataset from {len(dataset)} to {downsample_size} samples"
+            )
+            dataset = dataset.shuffle(seed=seed).select(range(downsample_size))
+
+        self.dataset = dataset
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        data = self.dataset[idx]
+        captions = data["captions"]
+
+        sample = {
+            # for simplicity I add the prompt here
+            "user_prompt": SHORT_CAPTION_PROMPT,
+            "captions": captions,
+            "image_id": data["image_id"],
+            "image": data["image"],
+        }
+
+        return sample
+
+
 def format_prompts(
     questions: List[str],
     images: Optional[List[Image.Image]],
@@ -324,11 +381,9 @@ def format_prompts(
         args: Arguments namespace with a `chat_mode` boolean attribute.
         processor: A processor used to tokenize and encode text+image inputs.
         chat_template_exists: Whether the chat template exists.
-
     Returns:
         list: Formatted prompts either as conversations (dict format) or plain strings.
     """
-
     if args.chat_mode and chat_template_exists:
         conversations_list = _format_as_conversations(questions, images, args)
         kwargs_chat_template = {
@@ -343,6 +398,10 @@ def format_prompts(
         # Apply the chat template to format the conversations
         return processor.apply_chat_template(**kwargs_chat_template)
 
+    elif args.chat_mode and not chat_template_exists:
+        # for simplicity I use these parameters for the custom prompt
+        return _format_as_custom_prompts_text_image(questions, images, args)
+
     else:
         return _format_as_plain_prompts(questions, images)
 
@@ -352,11 +411,15 @@ def _format_as_conversations(questions, images, args):
     continue_final_message = (
         hasattr(args, "continue_final_message") and args.continue_final_message
     )
+    guide_text: str = ""
+    if hasattr(args, "guide_text") and args.guide_text is not None:
+        guide_text = f" {args.guide_text}"
+    
     for question_text, image in zip(questions, images):
         content = []
         if image is not None:
             content.append({"type": "image"})
-        content.append({"type": "text", "text": f"{question_text}{args.guide_text}"})
+        content.append({"type": "text", "text": f"{question_text}{guide_text}"})
 
         conversation = [{"role": "user", "content": content}]
         conversation.insert(0, SYSTEM_ROLE)
@@ -371,6 +434,37 @@ def _format_as_plain_prompts(questions, images):
     for image, question_text in zip(images, questions):
         prompt_prefix = "<image>\n" if image is not None else ""
         prompt = f"{prompt_prefix}{question_text}{ANSWER_TEXT}"
+        formatted_prompts.append(prompt)
+    return formatted_prompts
+
+
+def _format_as_custom_prompts_text_image(questions, images, args):
+    system_message = SYSTEM_ROLE["content"][0]["text"]
+
+    continue_final_message = (
+        hasattr(args, "continue_final_message") and args.continue_final_message
+    )
+    formatted_prompts = []
+    for image, question_text in zip(images, questions):
+        prompt_parts = []
+
+        # System message
+        prompt_parts.append(f"{system_message}")
+
+        # User message with image token after text
+        user_message = f"USER: {question_text}"
+        user_message += "\n<image>\n" if image is not None else ""
+        prompt_parts.append(user_message)
+
+        # Assistant prefix (optional)
+        if continue_final_message:
+            prompt_parts.append("ASSISTANT: Answer:")
+        else:
+            prompt_parts.append("ASSISTANT:")
+
+        # Join with newlines
+        prompt = "".join(prompt_parts)
+
         formatted_prompts.append(prompt)
     return formatted_prompts
 
@@ -413,6 +507,114 @@ def preprocess_batch(
         raise ValueError(f"Invalid batch format: {e}")
 
 
+def collate_vqa_batch(
+    batch,
+    processor,
+    guide_text,
+    answer_letters_with_processed_batch,
+    chat_template_exists=True,
+):
+    # Custom collate function to handle images and text
+    questions = [item["question"] for item in batch]
+    answer_letters = [item["answer_letter"] for item in batch]
+    images = [item.get("image", None) for item in batch]
+    indices = [item.get("indices", None) for item in batch]
+    image_ids = [item.get("image_id", None) for item in batch]
+
+    if processor is not None:
+        # For simplicity, define args for backward code compatibility
+        # todo: redesign the interface if used in the future
+        args = argparse.Namespace(
+            chat_mode=True,
+            continue_final_message=True,
+            guide_text=guide_text,
+            # !"enforced" but consistent for these experiments
+        )
+
+        prompts = format_prompts(
+            questions=questions,
+            images=images,
+            args=args,
+            processor=processor,
+            chat_template_exists=chat_template_exists,
+            # !"enforced" but consistent for these experiments
+        )
+
+        processor_kwargs = {
+            "text": prompts,
+            "return_tensors": "pt",
+            "padding": (True if len(prompts) > 1 else False),
+        }
+
+        # todo: improve this, it is not neat
+        if any(image is not None for image in images):
+            processor_kwargs["images"] = images
+
+        tokenized = processor(**processor_kwargs)
+        if answer_letters_with_processed_batch:
+            # !not so neat but it's a backward compatibility feature
+            return tokenized, answer_letters
+        return tokenized
+
+    # Raw mode (default)
+    return {
+        "questions": questions,
+        "answer_letters": answer_letters,
+        "images": images,
+        "indices": indices,
+        "image_ids": image_ids,
+    }
+
+
+def collate_captioning_batch(
+    batch, processor, chat_template_exists=True, return_captions=False
+):
+    # Custom collate function to handle images and text
+    user_prompts = [item["user_prompt"] for item in batch]
+    captions = [item["captions"] for item in batch]
+    images = [item["image"] for item in batch]
+    image_ids = [item["image_id"] for item in batch]
+
+    if processor is not None:
+        # For simplicity, define args for backward code compatibility
+        # todo: redesign the interface if used in the future
+        args = argparse.Namespace(
+            chat_mode=True,
+            continue_final_message=True,
+            # !"enforced" but consistent for these experiments
+        )
+        
+        prompts = format_prompts(
+            # todo: rename questions to user_prompts
+            # this is a backward compatibility feature
+            questions=user_prompts,
+            images=images,
+            args=args,
+            processor=processor,
+            chat_template_exists=chat_template_exists,
+        )
+
+        processor_kwargs = {
+            "text": prompts,
+            "images": images,
+            "return_tensors": "pt",
+            "padding": (True if len(prompts) > 1 else False),
+        }
+
+        tokenized = processor(**processor_kwargs)
+        if return_captions:
+            return tokenized, captions
+        return tokenized
+
+    # Raw mode (default)
+    return {
+        "user_prompts": user_prompts,
+        "captions": captions,
+        "images": images,
+        "image_ids": image_ids,
+    }
+
+
 def get_dataloader(
     dataset_path_or_name: str,
     cache_dir: Optional[str] = None,
@@ -423,10 +625,11 @@ def get_dataloader(
     batch_size: int = 1,
     num_workers: int = 4,
     downsample_size: Optional[int] = None,
-    seed: Optional[int] = None,
+    seed: int = 42,
     processor: Optional[ProcessorType] = None,
     guide_text: str = "Answer the question using a single word or phrase.\n",
     answer_letters_with_processed_batch: bool = False,
+    chat_template_exists: bool = True,
 ):
     """
     Get a DataLoader for either multiple choice benchmarks or open-ended VQA datasets.
@@ -452,6 +655,7 @@ def get_dataloader(
         guide_text: Optional text to append to questions during prompt formatting.
         answer_letters_with_processed_batch: Whether to include answer letters in the processed batch,
             it just applies when a processor is provided.
+        chat_template_exists: Whether to use the chat template for formatting prompts.
     """
 
     print("\nLoading dataloader...")
@@ -484,56 +688,46 @@ def get_dataloader(
             texts_qa=texts_qa,
         )
 
-    def collate_fn(batch):
-        # Custom collate function to handle images and text
-        questions = [item["question"] for item in batch]
-        answer_letters = [item["answer_letter"] for item in batch]
-        images = [item.get("image", None) for item in batch]
-        indices = [item.get("indices", None) for item in batch]
-        image_ids = [item.get("image_id", None) for item in batch]
+    collate_fn = partial(
+        collate_vqa_batch,
+        processor=processor,
+        guide_text=guide_text,
+        answer_letters_with_processed_batch=answer_letters_with_processed_batch,
+        chat_template_exists=chat_template_exists,
+    )
 
-        if processor is not None:
-            # For simplicity, define args for backward code compatibility
-            # todo: redesign the interface if used in the future
-            args = argparse.Namespace(
-                chat_mode=True,
-                continue_final_message=True,
-                guide_text=guide_text,
-                # !"enforced" but consistent for these experiments
-            )
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=False,
+        collate_fn=collate_fn,
+        pin_memory=True,
+    )
 
-            prompts = format_prompts(
-                questions=questions,
-                images=images,
-                args=args,
-                processor=processor,
-                chat_template_exists=True,
-                # !"enforced" but consistent for these experiments
-            )
 
-            processor_kwargs = {
-                "text": prompts,
-                "return_tensors": "pt",
-                "padding": (True if len(prompts) > 1 else False),
-            }
+def get_dataloader_for_captioning(
+    dataset_path_or_name: str,
+    batch_size: int = 1,
+    num_workers: int = 4,
+    downsample_size: Optional[int] = None,
+    seed: int = 42,
+    processor: Optional[ProcessorType] = None,
+    chat_template_exists: bool = True,
+    return_captions: bool = False,
+):
+    dataset = ImageCaptioningDataset(
+        dataset_path_or_name=dataset_path_or_name,
+        downsample_size=downsample_size,
+        seed=seed,
+    )
 
-            if any(image is not None for image in images):
-                processor_kwargs["images"] = images
-
-            tokenized = processor(**processor_kwargs)
-            if answer_letters_with_processed_batch:
-                # !not so neat but it's a backward compatibility feature
-                return tokenized, answer_letters
-            return tokenized
-
-        # Raw mode (default)
-        return {
-            "questions": questions,
-            "answer_letters": answer_letters,
-            "images": images,
-            "indices": indices,
-            "image_ids": image_ids,
-        }
+    collate_fn = partial(
+        collate_captioning_batch,
+        processor=processor,
+        chat_template_exists=chat_template_exists,
+        return_captions=return_captions,
+    )
 
     return DataLoader(
         dataset,

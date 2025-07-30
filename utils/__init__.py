@@ -16,6 +16,7 @@ from .dataset import (
     get_dataloader,
     preprocess_batch,
     format_prompts,
+    get_dataloader_for_captioning,
 )
 from .io_utils import (
     save_extracted_residual_stream_data,
@@ -30,6 +31,7 @@ from .metrics_utils import (
     compute_layers_residual_stream_similarities,
     compute_heads_projection_residual_stream_similarities,
     compute_layers_intrinsic_dimension,
+    compute_layers_cosine_similarity,
 )
 from .model_utils import (
     load_hf_model_and_processor_or_tokenizer,
@@ -53,6 +55,8 @@ from .benchmarking_utils import (
     benchmark_model_vqa_processed_dataloader,
 )
 from .layers_weights_transplantation import transplant_layers_weights
+from .sample_img_txt_embedding_positions import sample_image_and_text_positions
+from .captioning_utils import benchmark_model_captioning_processed_dataloader
 
 __all__ = [
     "parse_layer_index",
@@ -66,6 +70,7 @@ __all__ = [
     "MMLU_ANSWER_CHOICES",
     "COCOQA_VI_DIGITS_MAP",
     "get_dataloader",
+    "get_dataloader_for_captioning",
     "preprocess_batch",
     "format_prompts",
     "save_extracted_residual_stream_data",
@@ -78,6 +83,7 @@ __all__ = [
     "compute_layers_residual_stream_similarities",
     "compute_heads_projection_residual_stream_similarities",
     "compute_layers_intrinsic_dimension",
+    "compute_layers_cosine_similarity",
     "load_hf_model_and_processor_or_tokenizer",
     "resolve_layer_indices",
     "replace_multimodal_lm",
@@ -95,4 +101,6 @@ __all__ = [
     "parse_predicted_answer",
     "benchmark_model_vqa_processed_dataloader",
     "transplant_layers_weights",
+    "sample_image_and_text_positions",
+    "benchmark_model_captioning_processed_dataloader",
 ]
