@@ -66,9 +66,10 @@ def benchmark_model_captioning_processed_dataloader(
 
     # Initialize lists to store generated captions and ground truth data
     # Needed for the COCO evaluation library
+    # Pre-allocate for performance since we know the exact size
     generated_results = [None] * dataset_size
-    gt_annotations = [None] * dataset_size
     gt_images = [None] * dataset_size
+    gt_annotations = []  # Variable size due to multiple captions per image
     annotation_id = 0
     dummy_image_id = 0
 
@@ -78,28 +79,27 @@ def benchmark_model_captioning_processed_dataloader(
         current_batch_size = len(generated_texts)
         
         for sample_idx in range(current_batch_size):
-            dummy_image_id += 1  # Unique ID per image
-
             # Save generated caption
             generated_results[dummy_image_id] = {
                 "image_id": dummy_image_id,
                 "caption": generated_texts[sample_idx],
             }
 
-            # Add image to ground truth images list
+            # Add image to ground truth images list 
             gt_images[dummy_image_id] = {
                 "id": dummy_image_id,
-                "file_name": f"image_{dummy_image_id}.jpg",
             }
 
             # Save all GT captions for this image (one by one as required)
             for ref in ref_captions_batch[sample_idx]:
-                gt_annotations[dummy_image_id] = {
+                gt_annotations.append({
                     "image_id": dummy_image_id,
                     "id": annotation_id,
                     "caption": ref,
-                }
+                })
                 annotation_id += 1
+            
+            dummy_image_id += 1  # Increment after processing this sample
         
         if dummy_image_id % update_every == 0 or dummy_image_id == dataset_size:
             progress_bar.update(dummy_image_id - last_update)
