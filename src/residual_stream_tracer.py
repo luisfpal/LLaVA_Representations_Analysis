@@ -701,6 +701,9 @@ class ResidualStreamHeadsProjectionTracer(HookBasedResidualStreamTracer):
         # where x is the input tensor of shape (batch, max_seq_len, hidden_size_in)
         # and W.T is the transposed weight matrix of shape (hidden_size_in, hidden_size_out)
         # The output tensor of shape (batch, max_seq_len, hidden_size_out)
+        # !W = module.weight.data could be taken but the code below to compute the projections
+        # !should be adapted to use it.
+        # ! module(x) = x * W.T = W * x (+b)
 
         # !To extract each head contribution to the input and project it to the residual stream,
         # !we need to slice the transposed weight matrix for each head, in blocks of
