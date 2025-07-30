@@ -3,17 +3,18 @@
   "python.envFile": "${workspaceFolder}/.env",
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.pythonPath": "${workspaceFolder}/.venv/bin/python",
-  "python.terminal.activateEnvironment": false,
+  "python.terminal.activateEnvironment": true,
   "python.analysis.extraPaths": [
     "${workspaceFolder}"
   ],
+  "python.analysis.autoImportCompletions": true,
   "terminal.integrated.env.linux": {
     "PYTHONPATH": "${workspaceFolder}",
-    "PATH": "/home/l11/.local/bin:${workspaceFolder}/.venv/bin:${env:PATH}",
+    // "PATH": "/home/l11/.local/bin:${workspaceFolder}/.venv/bin:${env:PATH}",
     "VIRTUAL_ENV": "${workspaceFolder}/.venv"
   },
   "editor.formatOnSave": true,
   "cursorpyright.analysis.extraPaths": [
     "${workspaceFolder}"
-  ],
+  ]
 }

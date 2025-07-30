@@ -57,6 +57,7 @@ from .benchmarking_utils import (
 from .layers_weights_transplantation import transplant_layers_weights
 from .sample_img_txt_embedding_positions import sample_image_and_text_positions
 from .captioning_utils import benchmark_model_captioning_processed_dataloader
+from .plot_utils import plot_similarity_measure_heatmap, plot_similarity_measure_matrix
 
 __all__ = [
     "parse_layer_index",
@@ -103,4 +104,6 @@ __all__ = [
     "transplant_layers_weights",
     "sample_image_and_text_positions",
     "benchmark_model_captioning_processed_dataloader",
+    "plot_similarity_measure_heatmap",
+    "plot_similarity_measure_matrix",
 ]

@@ -12,6 +12,9 @@ from utils.operations_utils import seed_all
 TRANSPLANTATION_WEIGHTS_METHODS = {}
 
 
+# Remove the hardcoded benchmark_model function - it should be passed as a parameter
+
+
 def get_transplantation_layers(method: str, num_layers: int, stride: int) -> List[int]:
     """Get the list of layers to process for transplantation."""
     base_layers = [i * stride for i in range(num_layers // stride + 1)]
