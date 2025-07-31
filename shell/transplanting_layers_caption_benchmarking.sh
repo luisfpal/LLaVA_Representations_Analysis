@@ -1,33 +1,36 @@
 #!/bin/bash
 # This script runs layer transplantation benchmarking for captioning tasks
 
-# --- Configuration Section ---
+# --- Model Configuration ---
 MULTIMODAL_MODEL_NAME_OR_PATH="llava-hf/llava-1.5-7b-hf"
 LANGUAGE_MODEL_NAME_OR_PATH="lmsys/vicuna-7b-v1.5"
 PRETRAINED_PROJECTOR_NAME_OR_PATH="liuhaotian/llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5"
 
-# Dataset configuration
+# --- Dataset Configuration ---
 DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
-# Transplantation configuration
-# TRANSPLANTATION_METHOD="sliding_window"
-TRANSPLANTATION_METHOD="two_parts"
+# --- Transplantation Configuration ---
+TRANSPLANTATION_METHOD="sliding_window"
+# TRANSPLANTATION_METHOD="two_parts"
 STRIDE="2"
 WINDOW_SIZE="2"
 
-# Benchmarking parameters
+# --- Benchmarking Parameters ---
 BATCH_SIZE="10"
-MAX_NEW_TOKENS="50"
+MAX_NEW_TOKENS="20"
 SEED="42"
 
-# Directory configuration
+# --- Output Configuration ---
+SAVE_BASELINE_OUTPUTS="true"  # Set to "false" to disable saving baseline outputs
+
+# --- Directory Configuration ---
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
 RESULTS_DIR="$PROJECT_DIR/results"
 MODEL_CACHE_DIR="$HOME/scratch/huggingface/hub"
 
-# Script configuration
-FILENAME="transplanting_layers_caption_benchmarking.py"
-FILEPATH="$PROJECT_DIR/scripts/$FILENAME"
+# --- Script Configuration ---
+SCRIPT_FILENAME="transplanting_layers_caption_benchmarking.py"
+SCRIPT_FILEPATH="$PROJECT_DIR/scripts/$SCRIPT_FILENAME"
 
 # --- Argument Construction ---
 SCRIPT_ARGS=()
@@ -44,7 +47,12 @@ SCRIPT_ARGS+=(--results_dir "$RESULTS_DIR")
 SCRIPT_ARGS+=(--dataset_path_or_name "$DATASET_PATH_OR_NAME")
 SCRIPT_ARGS+=(--seed "$SEED")
 
-# --- Debugger ---
+# Add save_baseline_outputs flag if enabled
+if [ "$SAVE_BASELINE_OUTPUTS" = "true" ]; then
+    SCRIPT_ARGS+=(--save_baseline_outputs)
+fi
+
+# --- Debug Configuration ---
 DEBUGGER_ARGS=()
 if [ "$1" = "--debug" ]; then
     DEBUGGER_ARGS=(-m debugpy --listen localhost:5678 --wait-for-client)
@@ -54,7 +62,7 @@ fi
 # --- Create directories ---
 mkdir -p "$RESULTS_DIR"
 
-# Print configuration
+# --- Display Configuration ---
 echo "====== Transplanting Layers Captioning Benchmarking Configuration ======"
 echo "Multimodal model: $MULTIMODAL_MODEL_NAME_OR_PATH"
 echo "Language model: $LANGUAGE_MODEL_NAME_OR_PATH"
@@ -68,16 +76,17 @@ echo "Model cache directory: $MODEL_CACHE_DIR"
 echo "Batch size: $BATCH_SIZE"
 echo "Max new tokens: $MAX_NEW_TOKENS"
 echo "Seed: $SEED"
+echo "Save baseline outputs: $SAVE_BASELINE_OUTPUTS"
 echo "==============================="
 
-# Run benchmarking
+# --- Run Benchmarking ---
 echo -e "\n====== Running Transplanting Layers Captioning Benchmarking ======"
 
 # Set PyTorch memory config
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Run the command
-TOKENIZERS_PARALLELISM=false python "${DEBUGGER_ARGS[@]}" "${FILEPATH}" "${SCRIPT_ARGS[@]}"
+TOKENIZERS_PARALLELISM=false python "${DEBUGGER_ARGS[@]}" "${SCRIPT_FILEPATH}" "${SCRIPT_ARGS[@]}"
 
 echo -e "\n====== Captioning Benchmarking Complete ======"
 echo "Results saved to: $RESULTS_DIR" 

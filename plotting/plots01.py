@@ -848,6 +848,369 @@ def plot_all_transplanting_layers_benchmarking(
         )
 
 
+def plot_transplanting_layers_caption_benchmarking(
+    results_loader: ResultsLoader,
+    metric_name: str,
+    save_plots: bool = False,
+):
+    """
+    Plot caption benchmarking results for a specific metric.
+    
+    Args:
+        results_loader: ResultsLoader instance with loaded data
+        metric_name: Metric to plot ('CIDEr' or 'SPICE')
+        save_plots: Whether to save plots instead of showing them
+    """
+    if "transplanting_layers_caption_benchmarking" not in results_loader.data:
+        print("⚠️  No transplanting layers caption benchmarking data loaded")
+        return
+
+    print(f"\n📊 Plotting caption benchmarking: {metric_name}")
+
+    # Available transplantation methods
+    transplantation_methods = ["two_parts_s2", "sliding_window_ws2_s2"]
+
+    # Create figure with 1x2 subplots (shared y-axis)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
+
+    # Collect all metric values to determine Y limits
+    all_metric_values = []
+
+    # Process each transplantation method
+    for idx, method in enumerate(transplantation_methods):
+        ax = axes[idx]
+
+        try:
+            # Get caption data for this method
+            data_df = results_loader.get_caption_benchmarking("coco_captioning", method)
+
+            # Extract layer data (excluding baseline models)
+            layer_prefix = (
+                "start_layer_"
+                if "sliding_window" in method
+                else "split_layer_"
+            )
+
+            # Get layer entries - the layer names are in the first column
+            layer_names_column = data_df.columns[0]
+            layer_rows_mask = data_df[layer_names_column].str.startswith(layer_prefix)
+            layer_data = data_df[layer_rows_mask]
+
+            layer_numbers = []
+            layer_metrics = []
+
+            for _, row in layer_data.iterrows():
+                layer_name = row[layer_names_column]
+                layer_num = int(layer_name.split("_")[-1])
+                metric_value = row[metric_name]
+
+                layer_numbers.append(layer_num)
+                layer_metrics.append(metric_value)
+
+            # Sort by layer number
+            sorted_data = sorted(zip(layer_numbers, layer_metrics))
+            layer_numbers, layer_metrics = zip(*sorted_data)
+
+            # Get baseline model metrics
+            fm_row = data_df[data_df[layer_names_column] == "mm_model"]
+            pm_row = data_df[data_df[layer_names_column] == "mm_pretrained_connector"]
+
+            fm_metric = fm_row[metric_name].iloc[0]
+            pm_metric = pm_row[metric_name].iloc[0]
+
+            # Prepare data for plotting
+            x_positions = list(range(len(layer_numbers) + 2))
+            all_metrics = list(layer_metrics) + [fm_metric, pm_metric]
+            x_labels = [str(num) for num in layer_numbers] + ["FM", "PM"]
+
+            # Collect all values for Y limits
+            all_metric_values.extend(all_metrics)
+
+            # Create bar plot
+            bars = ax.bar(x_positions, all_metrics, alpha=0.7, edgecolor="black")
+
+            # Color coding: layers in blue, FM in green, PM in red
+            for i, bar in enumerate(bars):
+                if i < len(layer_numbers):
+                    bar.set_color("skyblue")
+                elif x_labels[i] == "FM":
+                    bar.set_color("lightgreen")
+                else:  # PM
+                    bar.set_color("lightcoral")
+
+            # Customize subplot
+            ax.set_xlabel("Layer Number / Model Type", fontsize=12)
+            if idx == 0:  # Only first subplot gets y-label
+                ax.set_ylabel(metric_name, fontsize=12)
+
+            ax.set_title(f"{method}", fontsize=14, fontweight="bold")
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(x_labels, rotation=45 if len(x_labels) > 10 else 0)
+            ax.grid(True, alpha=0.3, axis="y")
+
+            # Add value labels on top of bars
+            for i, (pos, val) in enumerate(zip(x_positions, all_metrics)):
+                # Format value: round to 0 if very small, otherwise 2 decimals
+                if abs(val) < 0.01:
+                    display_val = "0"
+                else:
+                    display_val = f"{val:.2f}"
+                
+                ax.text(
+                    pos,
+                    val + 0.01,
+                    display_val,
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                )
+
+        except Exception as e:
+            print(f"⚠️  Failed to plot {method}/{metric_name}: {e}")
+            ax.text(
+                0.5,
+                0.5,
+                f"No data for\n{method}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=14,
+                color="red",
+            )
+            ax.set_title(f"{method}", fontsize=14, fontweight="bold")
+
+    # Set Y limits based on collected data
+    if all_metric_values:
+        y_max = max(all_metric_values)
+        y_max_adjusted = y_max * 1.1  # Add 10% padding
+        for ax in axes:
+            ax.set_ylim(0, y_max_adjusted)
+
+    # Add overall title
+    plt.suptitle(
+        f"Transplanting layers caption benchmarking: {metric_name}",
+        fontsize=16,
+        fontweight="bold",
+        y=0.95,
+    )
+
+    # Add legend
+    from matplotlib.patches import Patch
+
+    legend_elements = [
+        Patch(facecolor="skyblue", label="Layer Transplantation"),
+        Patch(facecolor="lightgreen", label="Full Model (FM)"),
+        Patch(facecolor="lightcoral", label="Pretrained Model (PM)"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.93),
+        ncol=3,
+        fontsize=11,
+    )
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.85)
+
+    filename = f"transplanting_layers_caption_benchmarking_{metric_name.lower()}.png"
+    save_plot_if_requested(save_plots, filename)
+
+
+def plot_all_transplanting_layers_caption_benchmarking(
+    results_loader: ResultsLoader, save_plots: bool = False
+):
+    """
+    Plot all available caption benchmarking experiments for CIDEr and SPICE metrics.
+    """
+    print("\n📊 Plotting all transplanting layers caption benchmarking experiments...")
+
+    # Available metrics
+    metrics = ["CIDEr", "SPICE"]
+
+    for metric in metrics:
+        plot_transplanting_layers_caption_benchmarking(
+            results_loader, metric, save_plots=save_plots
+        )
+
+
+def plot_modalities_similarities(
+    results_loader: ResultsLoader,
+    stream_types: List[str],
+    save_plots: bool = False,
+):
+    """
+    Plot modalities similarities as line plots.
+    
+    Args:
+        results_loader: ResultsLoader instance with loaded data
+        stream_types: List of stream types to plot (e.g., ['output_layer', 'post_mlp'])
+        save_plots: Whether to save plots instead of showing them
+    """
+    print("\n📊 Plotting modalities similarities...")
+    
+    if "modalities_similarities" not in results_loader.data:
+        print("⚠️  No modalities similarities data loaded")
+        return
+    
+    modalities_data = results_loader.data["modalities_similarities"]
+    
+    # Get all available models and datasets
+    all_models = list(modalities_data.keys())
+    all_datasets = set()
+    
+    for model_data in modalities_data.values():
+        for dataset in model_data.keys():
+            all_datasets.add(dataset)
+    
+    all_datasets = sorted(list(all_datasets))
+    
+    # Create 1x2 subplots (shared y-axis)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
+    
+    # Handle single subplot case
+    if len(all_datasets) == 1:
+        axes = [axes]
+    
+    # Define colors for models
+    model_colors = {
+        "full": "blue",
+        "pretrained": "red"
+    }
+    
+    # Define linestyles for stream types
+    stream_styles = {
+        "output_layer": "-",
+        "post_mlp": "--"
+    }
+    
+    # Collect all data values for Y limits
+    all_data_values = []
+    
+    # Plot data for each dataset (subplot)
+    for d_idx, dataset in enumerate(all_datasets):
+        ax = axes[d_idx]
+        
+        # Plot each model and stream type combination
+        for model in all_models:
+            for stream_type in stream_types:
+                try:
+                    similarity_data = results_loader.get_modalities_similarity(
+                        model, dataset, stream_type
+                    )
+                    
+                    if isinstance(similarity_data, torch.Tensor):
+                        similarity_data = similarity_data.numpy()
+                    
+                    # Collect data for Y limits
+                    all_data_values.extend(similarity_data)
+                    
+                    # Create line plot
+                    layers = range(len(similarity_data))
+                    color = model_colors.get(model, "gray")
+                    linestyle = stream_styles.get(stream_type, "-")
+                    
+                    ax.plot(
+                        layers, 
+                        similarity_data, 
+                        color=color,
+                        linestyle=linestyle,
+                        linewidth=2,
+                        label=f"{model}_{stream_type}"
+                    )
+                    
+                except KeyError:
+                    # Data not available for this combination
+                    continue
+        
+        # Configure subplot
+        ax.set_title(f"{dataset}", fontsize=14, fontweight="bold")
+        ax.set_xlabel("Layer", fontsize=12)
+        if d_idx == 0:  # Only first subplot gets y-label
+            ax.set_ylabel("Cosine Similarity", fontsize=12)
+        else:
+            # Remove Y-axis elements for non-first subplots
+            ax.tick_params(left=False)
+            ax.set_ylabel("")
+        
+        ax.grid(True, alpha=0.3)
+    
+    # Set Y limits based on collected data
+    if all_data_values:
+        y_min = min(all_data_values)
+        y_max = max(all_data_values)
+        # Add some padding
+        y_range = y_max - y_min
+        y_min_padded = y_min - 0.05 * y_range
+        y_max_padded = y_max + 0.05 * y_range
+        
+        for ax in axes:
+            ax.set_ylim(y_min_padded, y_max_padded)
+    
+    # Add legends only to the first subplot
+    if len(all_datasets) > 0:
+        first_ax = axes[0]
+        
+        # Create custom legend for models (colors)
+        from matplotlib.lines import Line2D
+        model_legend_elements = []
+        for model, color in model_colors.items():
+            model_legend_elements.append(
+                Line2D([0], [0], color=color, linewidth=3, label=model)
+            )
+        
+        # Create custom legend for stream types (linestyles)
+        stream_legend_elements = []
+        for stream_type, linestyle in stream_styles.items():
+            stream_legend_elements.append(
+                Line2D(
+                    [0], [0], 
+                    color="black", 
+                    linestyle=linestyle, 
+                    linewidth=2.5, 
+                    label=stream_type
+                )
+            )
+        
+        # Add model legend first
+        model_legend = first_ax.legend(
+            handles=model_legend_elements,
+            loc="upper left",
+            fontsize=9,
+            title_fontsize=10,
+            frameon=True,
+            fancybox=True,
+            shadow=True,
+            bbox_to_anchor=(0.0, 1),
+            ncol=len(model_colors),
+        )
+        
+        # Add model legend as artist to preserve it when adding second legend
+        first_ax.add_artist(model_legend)
+        
+        # Add stream types legend second
+        first_ax.legend(
+            handles=stream_legend_elements,
+            loc="upper left",
+            fontsize=9,
+            title_fontsize=10,
+            frameon=True,
+            fancybox=True,
+            shadow=True,
+            bbox_to_anchor=(0.0, 0.95),
+            ncol=len(stream_styles),
+            handlelength=5.0,
+            handletextpad=1.0,
+        )
+    
+    # Set overall title
+    plt.suptitle("Cosine similarity of trailing text and image embeddings", fontsize=16, fontweight="bold", y=0.98)
+    plt.tight_layout()
+    
+    filename = f"modalities_similarities_{'_'.join(stream_types)}.png"
+    save_plot_if_requested(save_plots, filename)
+
+
 def main(save_plots: bool = False):
     """Main function to demonstrate similarity measures heatmap."""
     # Initialize results loader and load all data
@@ -886,12 +1249,14 @@ def main(save_plots: bool = False):
     # ! results loaded and processed correctly: don't touch unless necessary
     print("🎉 All processing completed!")
 
-    plot_all_similarity_measures_matrices(results, save_plots=save_plots)
-    plot_all_output_layer_similarity_measures(results, save_plots=save_plots)
-    plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
-    plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
-    plot_all_model_data_measures(results, save_plots=save_plots)
-    plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
+    # plot_all_similarity_measures_matrices(results, save_plots=save_plots)
+    # plot_all_output_layer_similarity_measures(results, save_plots=save_plots)
+    # plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
+    # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
+    # plot_all_model_data_measures(results, save_plots=save_plots)
+    # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
+    # plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
+    plot_modalities_similarities(results, ["output_layer", "post_mlp"], save_plots=save_plots)
 
 
 if __name__ == "__main__":

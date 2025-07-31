@@ -13,6 +13,7 @@ models:
 datasets:
   - "cocoqa_img"
   - "cocoqa_txt"
+  - "coco_captioning"
 
 # Analysis parameters
 analysis:
@@ -24,3 +25,8 @@ analysis:
   intrinsic_dimension_defaults:
     k: 16
     range_max: 100
+
+# Modalities similarities configuration
+modalities_similarities:
+  datasets_with_modalities: ["coco_captioning", "cocoqa_img"]
+  stream_types: ["output_layer", "post_mlp"]

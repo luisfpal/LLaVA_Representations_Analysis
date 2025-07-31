@@ -17,7 +17,7 @@ from .constants import (
 from PIL import Image
 import argparse
 from functools import partial
-
+import re
 
 MULTIPLE_CHOICE_BENCHMARKS = ["mmlu", "scienceqa"]
 
@@ -161,6 +161,35 @@ class MultipleChoiceDatasetBenchmark(Dataset):
         return sample
 
 
+def extract_image_id(image_name: str) -> Optional[int]:
+    """
+    Extract the image id from the image name.
+    
+    Args:
+        image_name: Image filename (e.g., "COCO_val2014_000000522418.jpg")
+    
+    Returns:
+        Extracted image ID as integer, or None if extraction fails
+        
+    Example:
+        extract_image_id("COCO_val2014_000000522418.jpg") => 522418
+    """
+    if not image_name:
+        return None
+    
+    try:
+        # Split by "2014_" and get the part after it
+        if "2014_" not in image_name:
+            return None
+        
+        s = image_name.split("2014_")[1]
+        match = re.search(r'\d+', s)  # Find the first sequence of digits
+        if match:
+            return int(match.group())  # Automatically removes leading zeros
+        return None  # No digits found
+    except (IndexError, ValueError, AttributeError):
+        return None
+
 class OpenVQADataset(Dataset):
     """
     Dataset for Open-ended VQA datasets.
@@ -299,7 +328,7 @@ class OpenVQADataset(Dataset):
             "idx": question_data.get("idx", None),
             "question": full_question_prompt,
             "answer_letter": unique_qa_dict["answer"],
-            "image_id": question_data.get("image_id", None),
+            "image_id": extract_image_id(question_data.get("image_id", None)),
             # `answer_letter` is actually a word but it's called letter for convenience
             # and alignment with the multiple choice benchmarks
         }
@@ -358,7 +387,7 @@ class ImageCaptioningDataset(Dataset):
             # for simplicity I add the prompt here
             "user_prompt": SHORT_CAPTION_PROMPT,
             "captions": captions,
-            "image_id": data["image_id"],
+            "image_id": extract_image_id(data["image_id"]),
             "image": data["image"],
         }
 
@@ -567,8 +596,12 @@ def collate_vqa_batch(
 
 
 def collate_captioning_batch(
-    batch, processor, chat_template_exists=True, return_captions=False
+    batch, processor, chat_template_exists=True, return_captions=False, return_image_ids=False
 ):
+    # Sanity check
+    if return_image_ids and not return_captions:
+        raise ValueError("return_image_ids can only be True if return_captions is also True")
+    
     # Custom collate function to handle images and text
     user_prompts = [item["user_prompt"] for item in batch]
     captions = [item["captions"] for item in batch]
@@ -602,7 +635,9 @@ def collate_captioning_batch(
         }
 
         tokenized = processor(**processor_kwargs)
-        if return_captions:
+        if return_captions and return_image_ids:
+            return tokenized, captions, image_ids
+        elif return_captions:
             return tokenized, captions
         return tokenized
 
@@ -715,6 +750,7 @@ def get_dataloader_for_captioning(
     processor: Optional[ProcessorType] = None,
     chat_template_exists: bool = True,
     return_captions: bool = False,
+    return_image_ids: bool = False,
 ):
     dataset = ImageCaptioningDataset(
         dataset_path_or_name=dataset_path_or_name,
@@ -727,6 +763,7 @@ def get_dataloader_for_captioning(
         processor=processor,
         chat_template_exists=chat_template_exists,
         return_captions=return_captions,
+        return_image_ids=return_image_ids,
     )
 
     return DataLoader(

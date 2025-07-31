@@ -92,14 +92,17 @@ def run_transplantation_experiments(
     return benchmarking_results
 
 
-def get_output_filename(models_name: str, method: str, method_args: Dict) -> str:
+def get_output_filename(model_identifiers_list: List[str], method: str, method_args: Dict) -> str:
     """Generate output filename based on transplantation method."""
     stride = method_args["stride"]
+    # Create a descriptive model identifier for the filename
+    combined_model_id = "_".join(model_identifiers_list)
+    
     if method == "sliding_window":
         window_size = method_args["window_size"]
-        return f"{models_name}_sliding_window_ws{window_size}_s{stride}.csv"
+        return f"{combined_model_id}_sliding_window_ws{window_size}_s{stride}.csv"
     else:  # two_parts
-        return f"{models_name}_two_parts_s{stride}.csv"
+        return f"{combined_model_id}_two_parts_s{stride}.csv"
 
 
 def setup_models(args) -> Tuple[object, object, object]:
@@ -135,27 +138,54 @@ def benchmark_baseline_models(
     processor,
     max_new_tokens: int,
     benchmark_func: Callable,
+    results_dir: str,
+    model_identifiers_list: List[str],
+    save_baseline_outputs: bool = False,
 ) -> Tuple[Dict[str, float], Dict[str, float]]:
     """Benchmark both baseline models and return their results."""
     print("\nBenchmarking baseline multimodal model... 📊")
-    mm_model_results = benchmark_func(
+    
+    # Prepare save path for baseline multimodal model outputs
+    baseline_model_save_path = None
+    if save_baseline_outputs:
+        multimodal_model_id = model_identifiers_list[0]  # Multimodal model identifier
+        baseline_model_save_path = os.path.join(results_dir, f"{multimodal_model_id}_outputs.json")
+        # Skip if file already exists
+        if os.path.exists(baseline_model_save_path):
+            print(f"Skipping baseline model outputs save - file already exists: {baseline_model_save_path}")
+            baseline_model_save_path = None
+    
+    baseline_model_results = benchmark_func(
         multimodal_model,
         processed_dataloader,
         processor,
         max_new_tokens,
         dtype=torch.float32,
+        save_outputs_path=baseline_model_save_path,
     )
 
     print("\nBenchmarking multimodal model with pretrained connector... 📊")
-    mm_pretrained_connector_results = benchmark_func(
+    
+    # Prepare save path for pretrained connector model outputs
+    pretrained_connector_save_path = None
+    if save_baseline_outputs:
+        pretrained_connector_model_id = model_identifiers_list[1]  # Pretrained connector model identifier
+        pretrained_connector_save_path = os.path.join(results_dir, f"{pretrained_connector_model_id}_outputs.json")
+        # Skip if file already exists
+        if os.path.exists(pretrained_connector_save_path):
+            print(f"Skipping pretrained connector outputs save - file already exists: {pretrained_connector_save_path}")
+            pretrained_connector_save_path = None
+    
+    pretrained_connector_results = benchmark_func(
         multimodal_model_pretrained_connector,
         processed_dataloader,
         processor,
         max_new_tokens,
         dtype=torch.float32,
+        save_outputs_path=pretrained_connector_save_path,
     )
 
-    return mm_model_results, mm_pretrained_connector_results
+    return baseline_model_results, pretrained_connector_results
 
 
 def create_benchmark_model_wrapper(benchmark_func: Callable) -> Callable:
@@ -166,15 +196,22 @@ def create_benchmark_model_wrapper(benchmark_func: Callable) -> Callable:
         processor,
         max_new_tokens: int,
         dtype: torch.dtype = torch.float16,
+        save_outputs_path: str = None,
     ) -> Dict[str, float]:
         """Benchmark model with automatic GPU device management."""
         model.to(device="cuda:0", dtype=dtype)
-        results = benchmark_func(
-            model=model,
-            processed_dataloader=processed_dataloader,
-            processor=processor,
-            max_new_tokens=max_new_tokens,
-        )
+        benchmark_func_kwargs = {
+            "model": model,
+            "processed_dataloader": processed_dataloader,
+            "processor": processor,
+            "max_new_tokens": max_new_tokens,
+        }
+        if "captioning" in benchmark_func.__name__:
+            benchmark_func_kwargs["save_captions_path"] = save_outputs_path
+        elif "vqa" in benchmark_func.__name__:
+            benchmark_func_kwargs["save_answers_path"] = save_outputs_path
+        results = benchmark_func(**benchmark_func_kwargs)
+
         model.to("cpu")
         return results
     
@@ -203,10 +240,11 @@ def run_transplantation_benchmarking(
     # Setup models
     multimodal_model, multimodal_model_pretrained_connector, processor = setup_models(args)
     model_num_layers = multimodal_model.language_model.config.num_hidden_layers
-    models_name = (
-        f"{args.multimodal_model_name_or_path.split('/')[-1]}"
-        f"_{args.language_model_name_or_path.split('/')[-1]}"
-    )
+    
+    # Create descriptive model identifiers for file naming
+    multimodal_model_id = args.multimodal_model_name_or_path.split('/')[-1]
+    language_model_id = args.language_model_name_or_path.split('/')[-1]
+    model_identifiers_list = [multimodal_model_id, f"{multimodal_model_id}_{language_model_id}_pretrained_connector"]
 
     # Setup output directories
     results_dir = os.path.expanduser(args.results_dir)
@@ -237,24 +275,27 @@ def run_transplantation_benchmarking(
         os.makedirs(dataset_dir, exist_ok=True)
 
         # Benchmark baseline models
-        mm_model_results, mm_pretrained_connector_results = benchmark_baseline_models(
+        baseline_model_results, pretrained_connector_results = benchmark_baseline_models(
             multimodal_model,
             multimodal_model_pretrained_connector,
             processed_dataloader,
             processor,
             args.max_new_tokens,
             benchmark_model,
+            dataset_dir,
+            model_identifiers_list,
+            getattr(args, 'save_baseline_outputs', False),
         )
 
         # Run transplantation experiments
-        transplantation_method_args = TRANSPLANTATION_WEIGHTS_METHODS[
+        transplantation_method_config = TRANSPLANTATION_WEIGHTS_METHODS[
             args.transplantation_method
         ]
 
         start_time = time.time()
-        benchmarking_results = run_transplantation_experiments(
+        transplantation_results = run_transplantation_experiments(
             method=args.transplantation_method,
-            method_args=transplantation_method_args,
+            method_args=transplantation_method_config,
             source_model=multimodal_model,
             target_model=multimodal_model_pretrained_connector,
             num_layers=model_num_layers,
@@ -266,23 +307,23 @@ def run_transplantation_benchmarking(
         end_time = time.time()
 
         print(
-            f"Time taken for {args.transplantation_method} transplantation: {(end_time - start_time) / 60:.2f} minutes 🕒"
+            f"Time taken for {args.transplantation_method} transplantation with {dataset_name} dataset: {(end_time - start_time) / 60:.2f} minutes 🕒"
         )
 
-        # Add baseline results and save
-        benchmarking_results.update(
-            {
-                "mm_model": mm_model_results,
-                "mm_pretrained_connector": mm_pretrained_connector_results,
-            }
-        )
+        # Combine all results and save
+        all_results = transplantation_results.copy()
+        all_results.update({
+            "mm_model": baseline_model_results,
+            "mm_pretrained_connector": pretrained_connector_results,
+        })
 
-        filename = get_output_filename(
-            models_name, args.transplantation_method, transplantation_method_args
+        # Save results to CSV
+        output_filename = get_output_filename(
+            model_identifiers_list, args.transplantation_method, transplantation_method_config
         )
-        df = pd.DataFrame.from_dict(benchmarking_results, orient="index")
-        output_path = os.path.join(dataset_dir, filename)
-        df.to_csv(output_path, index=True)
+        results_df = pd.DataFrame.from_dict(all_results, orient="index")
+        output_path = os.path.join(dataset_dir, output_filename)
+        results_df.to_csv(output_path, index=True)
         print(f"Results saved to: {output_path} 📝")
         print(f"{'=' * 80}\n")
 
@@ -309,6 +350,8 @@ def create_common_parser() -> argparse.ArgumentParser:
     parser.add_argument("--results_dir", type=str, required=True)
     parser.add_argument("--dataset_path_or_name", type=str, required=True)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--save_baseline_outputs", action="store_true",
+                       help="Save baseline model outputs (captions/answers) to JSON files")
     return parser
 
 

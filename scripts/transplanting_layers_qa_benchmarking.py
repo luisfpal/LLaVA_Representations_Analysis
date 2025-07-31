@@ -44,6 +44,11 @@ def main():
     Each CSV contains accuracy metrics for different transplantation configurations
     plus baseline results for both the original multimodal model and the model
     with pretrained connector.
+    
+    When --save_baseline_outputs is used, baseline model answers are saved as JSON files:
+    results/transplanting_layers_qa_benchmarking/{dataset_name}/
+    ├── {models}_mm_model_outputs.json
+    └── {models}_mm_pretrained_connector_outputs.json
     """
 
     parser = create_common_parser()

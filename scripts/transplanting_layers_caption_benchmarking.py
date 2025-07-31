@@ -13,6 +13,7 @@ DATASETS = {
     "coco_captioning": {
         "downsample_size": 2500,
         "return_captions": True,
+        "return_image_ids": True,
     }
 }
 
@@ -36,11 +37,14 @@ def main():
     Each CSV contains captioning metrics (BLEU, METEOR, ROUGE-L, CIDEr, SPICE)
     for different transplantation configurations plus baseline results for both
     the original multimodal model and the model with pretrained connector.
+    
+    When --save_baseline_outputs is used, baseline model captions are saved as JSON files:
+    results/transplanting_layers_caption_benchmarking/{dataset_name}/
+    ├── {multimodal_model_name}_outputs.json
+    └── {multimodal_model_name}_{language_model_name}_pretrained_connector_outputs.json
     """
 
     parser = create_common_parser()
-    # Override default max_new_tokens for captioning
-    parser.set_defaults(max_new_tokens=50)
     args = parser.parse_args()
 
     # Setup transplantation methods configuration
@@ -51,7 +55,7 @@ def main():
         dataset_config=DATASETS,
         get_dataloader_func=get_dataloader_for_captioning,
         benchmark_func=benchmark_model_captioning_processed_dataloader,
-        results_subdir="transplanting_layers_caption_benchmarking",
+        results_subdir="transplanting_layers_caption_benchmarking_max_new_tokens_20",
     )
 
 

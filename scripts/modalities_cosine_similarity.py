@@ -129,6 +129,14 @@ def main():
     │   │   ├── modalities_similarity/
     │   │   │   └── <stream_type>_sample.safetensors
 
+    ! Comment: 🤦‍♂️ a better structure would have been:
+    results/
+    ├── modalities_similarities/
+    │   ├── model_name/
+    │   │   ├── dataset_name/
+    │   │   │   └── <stream_type>_sample.safetensors
+    ! ✅ I corrected this in the code for plotting purposes
+
     Command-line arguments allow selection of specific residual stream types to control which analyses are performed.
     """
     parser = argparse.ArgumentParser(
