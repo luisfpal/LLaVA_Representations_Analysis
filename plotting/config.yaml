@@ -30,3 +30,10 @@ analysis:
 modalities_similarities:
   datasets_with_modalities: ["coco_captioning", "cocoqa_img"]
   stream_types: ["output_layer", "post_mlp"]
+
+# Caption benchmarking configuration
+caption_benchmarking:
+  directories:
+    - "transplanting_layers_caption_benchmarking"
+    - "transplanting_layers_caption_benchmarking_max_new_tokens_20"
+  experiment_types: ["sliding_window", "two_parts"]

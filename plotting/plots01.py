@@ -848,27 +848,111 @@ def plot_all_transplanting_layers_benchmarking(
         )
 
 
-def plot_transplanting_layers_caption_benchmarking(
+def _extract_max_tokens_from_directory(directory_name: str) -> int:
+    """
+    Extract max_new_tokens value from directory name.
+    
+    Args:
+        directory_name: Directory name (e.g., 'transplanting_layers_caption_benchmarking_max_new_tokens_20')
+        
+    Returns:
+        int: Number of max_new_tokens (default: 50)
+    """
+    if "max_new_tokens_20" in directory_name:
+        return 20
+    else:
+        return 50  # Default for transplanting_layers_caption_benchmarking
+
+
+def _extract_caption_benchmarking_data(data_df, method, metric_name):
+    """
+    Extract and validate caption benchmarking data for plotting.
+    
+    Args:
+        data_df: DataFrame containing caption benchmarking results
+        method: Transplantation method name
+        metric_name: Name of the metric to extract
+        
+    Returns:
+        tuple: (layer_numbers, layer_metrics, fm_metric, pm_metric)
+        
+    Raises:
+        ValueError: If data structure is invalid
+    """
+    # Validate data structure
+    if data_df.empty:
+        raise ValueError(f"Empty dataframe for {method}")
+    
+    if metric_name not in data_df.columns:
+        raise ValueError(f"Metric '{metric_name}' not found in data columns: {list(data_df.columns)}")
+
+    # Extract layer data (excluding baseline models)
+    layer_prefix = (
+        "start_layer_"
+        if "sliding_window" in method
+        else "split_layer_"
+    )
+
+    # Get layer entries - the layer names are in the first column
+    layer_names_column = data_df.columns[0]
+    layer_rows_mask = data_df[layer_names_column].str.startswith(layer_prefix)
+    layer_data = data_df[layer_rows_mask]
+
+    if layer_data.empty:
+        raise ValueError(f"No layer data found for prefix '{layer_prefix}' in {method}")
+
+    layer_numbers = []
+    layer_metrics = []
+
+    for _, row in layer_data.iterrows():
+        layer_name = row[layer_names_column]
+        layer_num = int(layer_name.split("_")[-1])
+        metric_value = row[metric_name]
+
+        layer_numbers.append(layer_num)
+        layer_metrics.append(metric_value)
+
+    # Sort by layer number
+    sorted_data = sorted(zip(layer_numbers, layer_metrics))
+    layer_numbers, layer_metrics = zip(*sorted_data)
+
+    # Get baseline model metrics
+    fm_row = data_df[data_df[layer_names_column] == "mm_model"]
+    pm_row = data_df[data_df[layer_names_column] == "mm_pretrained_connector"]
+
+    if fm_row.empty or pm_row.empty:
+        raise ValueError(f"Missing baseline model data in {method}")
+
+    fm_metric = fm_row[metric_name].iloc[0]
+    pm_metric = pm_row[metric_name].iloc[0]
+    
+    return layer_numbers, layer_metrics, fm_metric, pm_metric
+
+
+def plot_caption_benchmarking_for_directory(
     results_loader: ResultsLoader,
     metric_name: str,
+    directory_name: str,
     save_plots: bool = False,
 ):
     """
-    Plot caption benchmarking results for a specific metric.
+    Plot caption benchmarking results for a specific metric and directory.
     
     Args:
         results_loader: ResultsLoader instance with loaded data
         metric_name: Metric to plot ('CIDEr' or 'SPICE')
+        directory_name: Directory name (e.g., 'transplanting_layers_caption_benchmarking')
         save_plots: Whether to save plots instead of showing them
     """
     if "transplanting_layers_caption_benchmarking" not in results_loader.data:
         print("⚠️  No transplanting layers caption benchmarking data loaded")
         return
 
-    print(f"\n📊 Plotting caption benchmarking: {metric_name}")
+    print(f"\n📊 Plotting caption benchmarking: {metric_name} from {directory_name}")
 
     # Available transplantation methods
     transplantation_methods = ["two_parts_s2", "sliding_window_ws2_s2"]
+    dataset_name = "coco_captioning"
 
     # Create figure with 1x2 subplots (shared y-axis)
     fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
@@ -881,42 +965,13 @@ def plot_transplanting_layers_caption_benchmarking(
         ax = axes[idx]
 
         try:
-            # Get caption data for this method
-            data_df = results_loader.get_caption_benchmarking("coco_captioning", method)
+            # Get caption data for this method from specific directory
+            data_df = results_loader.get_caption_benchmarking(dataset_name, method, directory_name)
 
-            # Extract layer data (excluding baseline models)
-            layer_prefix = (
-                "start_layer_"
-                if "sliding_window" in method
-                else "split_layer_"
+            # Extract and validate data using helper function
+            layer_numbers, layer_metrics, fm_metric, pm_metric = _extract_caption_benchmarking_data(
+                data_df, method, metric_name
             )
-
-            # Get layer entries - the layer names are in the first column
-            layer_names_column = data_df.columns[0]
-            layer_rows_mask = data_df[layer_names_column].str.startswith(layer_prefix)
-            layer_data = data_df[layer_rows_mask]
-
-            layer_numbers = []
-            layer_metrics = []
-
-            for _, row in layer_data.iterrows():
-                layer_name = row[layer_names_column]
-                layer_num = int(layer_name.split("_")[-1])
-                metric_value = row[metric_name]
-
-                layer_numbers.append(layer_num)
-                layer_metrics.append(metric_value)
-
-            # Sort by layer number
-            sorted_data = sorted(zip(layer_numbers, layer_metrics))
-            layer_numbers, layer_metrics = zip(*sorted_data)
-
-            # Get baseline model metrics
-            fm_row = data_df[data_df[layer_names_column] == "mm_model"]
-            pm_row = data_df[data_df[layer_names_column] == "mm_pretrained_connector"]
-
-            fm_metric = fm_row[metric_name].iloc[0]
-            pm_metric = pm_row[metric_name].iloc[0]
 
             # Prepare data for plotting
             x_positions = list(range(len(layer_numbers) + 2))
@@ -966,7 +1021,7 @@ def plot_transplanting_layers_caption_benchmarking(
                 )
 
         except Exception as e:
-            print(f"⚠️  Failed to plot {method}/{metric_name}: {e}")
+            print(f"⚠️  Failed to plot {method}/{metric_name} from {directory_name}: {e}")
             ax.text(
                 0.5,
                 0.5,
@@ -986,9 +1041,12 @@ def plot_transplanting_layers_caption_benchmarking(
         for ax in axes:
             ax.set_ylim(0, y_max_adjusted)
 
-    # Add overall title
+    # Extract max_new_tokens from directory name
+    max_tokens = _extract_max_tokens_from_directory(directory_name)
+    
+    # Add overall title with token information
     plt.suptitle(
-        f"Transplanting layers caption benchmarking: {metric_name}",
+        f"Transplanting layers caption benchmarking: {metric_name} (max_new_tokens={max_tokens})",
         fontsize=16,
         fontweight="bold",
         y=0.95,
@@ -1013,8 +1071,51 @@ def plot_transplanting_layers_caption_benchmarking(
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)
 
-    filename = f"transplanting_layers_caption_benchmarking_{metric_name.lower()}.png"
+    # Create filename with token information
+    max_tokens = _extract_max_tokens_from_directory(directory_name)
+    token_suffix = f"_tokens{max_tokens}"
+    filename = f"transplanting_layers_caption_benchmarking_{metric_name.lower()}{token_suffix}.png"
     save_plot_if_requested(save_plots, filename)
+
+
+def plot_transplanting_layers_caption_benchmarking(
+    results_loader: ResultsLoader,
+    metric_name: str,
+    save_plots: bool = False,
+):
+    """
+    Plot caption benchmarking results for a specific metric (default directory).
+    
+    Args:
+        results_loader: ResultsLoader instance with loaded data
+        metric_name: Metric to plot ('CIDEr' or 'SPICE')
+        save_plots: Whether to save plots instead of showing them
+    """
+    # Use default directory for backward compatibility
+    default_directory = "transplanting_layers_caption_benchmarking"
+    plot_caption_benchmarking_for_directory(
+        results_loader, metric_name, default_directory, save_plots
+    )
+
+
+def _print_caption_benchmarking_summary(results_loader):
+    """
+    Print a summary of available caption benchmarking data.
+    
+    Args:
+        results_loader: ResultsLoader instance with loaded data
+    """
+    if "transplanting_layers_caption_benchmarking" not in results_loader.data:
+        print("⚠️  No caption benchmarking data available")
+        return
+    
+    print("\n📋 Caption Benchmarking Data Summary:")
+    caption_data = results_loader.data["transplanting_layers_caption_benchmarking"]
+    
+    for dataset_name, experiments in caption_data.items():
+        print(f"  📊 {dataset_name}:")
+        for experiment_name in experiments.keys():
+            print(f"    - {experiment_name}")
 
 
 def plot_all_transplanting_layers_caption_benchmarking(
@@ -1025,13 +1126,20 @@ def plot_all_transplanting_layers_caption_benchmarking(
     """
     print("\n📊 Plotting all transplanting layers caption benchmarking experiments...")
 
+    # Print summary of available data
+    _print_caption_benchmarking_summary(results_loader)
+
     # Available metrics
     metrics = ["CIDEr", "SPICE"]
+    
+    # Available directories from config
+    caption_directories = results_loader.config.get("caption_benchmarking", {}).get("directories", [])
 
     for metric in metrics:
-        plot_transplanting_layers_caption_benchmarking(
-            results_loader, metric, save_plots=save_plots
-        )
+        for directory in caption_directories:
+            plot_caption_benchmarking_for_directory(
+                results_loader, metric, directory, save_plots=save_plots
+            )
 
 
 def plot_modalities_similarities(
@@ -1255,8 +1363,8 @@ def main(save_plots: bool = False):
     # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
     # plot_all_model_data_measures(results, save_plots=save_plots)
     # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
-    # plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
-    plot_modalities_similarities(results, ["output_layer", "post_mlp"], save_plots=save_plots)
+    plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
+    # plot_modalities_similarities(results, ["output_layer", "post_mlp"], save_plots=save_plots)
 
 
 if __name__ == "__main__":

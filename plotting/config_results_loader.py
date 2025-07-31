@@ -622,13 +622,13 @@ class ResultsLoader:
         
         return modalities_similarities
 
-    def _load_transplanting_layers_caption_benchmarking(self) -> Dict[str, Any]:
-        """Load caption benchmarking experiment results."""
+    def _load_caption_benchmarking_directory(self, directory_name: str) -> Dict[str, Any]:
+        """Load caption benchmarking results from a specific directory."""
         caption_benchmarking = {}
-        caption_dir = self.results_dir / "transplanting_layers_caption_benchmarking"
+        caption_dir = self.results_dir / directory_name
         
         if not caption_dir.exists():
-            print("⚠️  No transplanting layers caption benchmarking results found")
+            print(f"⚠️  No caption benchmarking results found in {directory_name}")
             return caption_benchmarking
             
         for dataset_dir in caption_dir.iterdir():
@@ -647,6 +647,7 @@ class ResultsLoader:
                     print(f"⚠️  Failed to load {filename}: {e}")
                     continue
                 
+                # Extract experiment type and parameters
                 if "sliding_window" in filename:
                     key = filename.split("sliding_window_")[-1]
                     caption_benchmarking[dataset_name][f"sliding_window_{key}"] = data
@@ -655,6 +656,28 @@ class ResultsLoader:
                     caption_benchmarking[dataset_name][f"two_parts_{key}"] = data
         
         return caption_benchmarking
+
+    def _load_transplanting_layers_caption_benchmarking(self) -> Dict[str, Any]:
+        """Load all caption benchmarking experiment results from configured directories."""
+        all_caption_benchmarking = {}
+        
+        # Get configured caption benchmarking directories
+        caption_directories = self.config.get("caption_benchmarking", {}).get("directories", [])
+        
+        for directory_name in caption_directories:
+            directory_data = self._load_caption_benchmarking_directory(directory_name)
+            
+            # Merge data with directory name as prefix to avoid conflicts
+            for dataset_name, experiments in directory_data.items():
+                if dataset_name not in all_caption_benchmarking:
+                    all_caption_benchmarking[dataset_name] = {}
+                
+                for experiment_name, experiment_data in experiments.items():
+                    # Create unique key with directory prefix
+                    unique_key = f"{directory_name}_{experiment_name}"
+                    all_caption_benchmarking[dataset_name][unique_key] = experiment_data
+        
+        return all_caption_benchmarking
 
     # === Data Access Methods ===
 
@@ -736,11 +759,30 @@ class ResultsLoader:
             raise KeyError(f"Modalities similarity data not found: {model}/{dataset}/{stream_type}")
 
     def get_caption_benchmarking(
-        self, dataset: str, experiment: str
+        self, dataset: str, experiment: str, directory_name: str = None
     ) -> pd.DataFrame:
-        """Get caption benchmarking experiment results."""
+        """Get caption benchmarking experiment results.
+        
+        Args:
+            dataset: Dataset name (e.g., "coco_captioning")
+            experiment: Experiment name (e.g., "sliding_window_ws2_s2")
+            directory_name: Optional directory name to specify which experiment to load
+                          If None, will try to find the experiment in any available directory
+        """
         try:
-            return self.data["transplanting_layers_caption_benchmarking"][dataset][experiment]
+            if directory_name:
+                # Look for specific directory
+                full_experiment_name = f"{directory_name}_{experiment}"
+                return self.data["transplanting_layers_caption_benchmarking"][dataset][full_experiment_name]
+            else:
+                # Look for experiment in any available directory
+                available_experiments = self.data["transplanting_layers_caption_benchmarking"][dataset]
+                for exp_name, exp_data in available_experiments.items():
+                    if exp_name.endswith(f"_{experiment}"):
+                        return exp_data
+                
+                # If not found, try exact match
+                return self.data["transplanting_layers_caption_benchmarking"][dataset][experiment]
         except KeyError:
             raise KeyError(f"Caption benchmarking data not found: {dataset}/{experiment}")
 
