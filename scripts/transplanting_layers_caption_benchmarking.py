@@ -14,7 +14,16 @@ DATASETS = {
         "downsample_size": 2500,
         "return_captions": True,
         "return_image_ids": True,
+        "return_images": True,
     }
+}
+
+# CLIP and BERT score configuration
+CLIP_CONFIG = {
+    "clip_model_name_or_path": "openai/clip-vit-large-patch14-336",
+    "clip_cache_dir": "~/scratch/huggingface/hub",
+    "clip_weight": 2.5,
+    "clip_batch_size": 16,
 }
 
 
@@ -34,7 +43,7 @@ def main():
     ├── {models}_sliding_window_ws{window_size}_s{stride}.csv
     └── {models}_two_parts_s{stride}.csv
 
-    Each CSV contains captioning metrics (BLEU, METEOR, ROUGE-L, CIDEr, SPICE)
+    Each CSV contains captioning metrics (BLEU, METEOR, ROUGE-L, CIDEr, SPICE, CLIP-S, RefCLIP-S, BERT-S)
     for different transplantation configurations plus baseline results for both
     the original multimodal model and the model with pretrained connector.
     
@@ -55,7 +64,7 @@ def main():
         dataset_config=DATASETS,
         get_dataloader_func=get_dataloader_for_captioning,
         benchmark_func=benchmark_model_captioning_processed_dataloader,
-        results_subdir="transplanting_layers_caption_benchmarking_max_new_tokens_20",
+        results_subdir=f"transplanting_layers_caption_benchmarking_max_new_tokens_{args.max_new_tokens}",
     )
 
 
