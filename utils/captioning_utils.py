@@ -16,6 +16,7 @@ import gc
 from torch.utils.data import DataLoader
 from transformers.feature_extraction_utils import BatchFeature
 from tqdm import tqdm
+from bertscore import bertscore
 from .model_utils import ModelType, ProcessorType
 
 
@@ -61,6 +62,79 @@ def save_captions_to_file(captions_data: List[Dict], file_path: str) -> None:
         print(f"Warning: Failed to save captions to {file_path}: {e}")
 
 
+def compute_clip_scores(images, captions, clip_processor, clip_model, device):
+    """
+    images: list of PIL.Image
+    captions: list of generated captions (strings), 1 per image
+    """
+    clip_scores = []
+
+    for img, caption in tqdm(
+        zip(images, captions), total=len(images), desc="CLIPScore"
+    ):
+        inputs = clip_processor(
+            text=[caption], images=img, return_tensors="pt", padding=True
+        ).to(device)
+
+        with torch.no_grad():
+            outputs = clip_model(**inputs)
+            image_embeds = outputs.image_embeds
+            text_embeds = outputs.text_embeds
+
+        score = torch.nn.functional.cosine_similarity(image_embeds, text_embeds).item()
+        clip_scores.append(score)
+
+    return clip_scores
+
+
+def compute_bert_scores(generated_captions, list_of_reference_lists):
+    """
+    generated_captions: list of generated strings
+    list_of_reference_lists: list of list of reference captions
+                             e.g. [[ref1a, ref1b], [ref2a, ref2b], ...]
+    """
+    # Convert multiple references into one string per sample by joining with " [SEP] "
+    refs_joined = [" [SEP] ".join(refs) for refs in list_of_reference_lists]
+
+    P, R, F1 = bertscore(
+        cands=generated_captions,
+        refs=refs_joined,
+        model_type="bert-base-uncased",
+        lang="en",
+    )
+    return F1.tolist()  # Return F1 scores as a list
+
+
+# todo: test these functions
+def _get_generated_captions_from_list_of_dicts(
+    list_of_dicts: List[Dict], dataset_size: int
+) -> List[str]:
+    """
+    list_of_dicts: list of dicts with "caption" key
+    """
+    generated_captions = {None: None} * dataset_size
+    for d in list_of_dicts:
+        if d["image_id"] not in generated_captions:
+            generated_captions[d["image_id"]] = d["caption"]
+    generated_captions = sorted(generated_captions.items(), key=lambda x: x[0])
+    return list(generated_captions.values())
+
+
+def _get_reference_captions_from_list_of_dicts(
+    list_of_dicts: List[Dict], dataset_size: int
+) -> List[List[str]]:
+    """
+    list_of_dicts: list of dicts with "caption" key
+    """
+    reference_captions = {None: None} * dataset_size
+    for d in list_of_dicts:
+        if d["image_id"] not in reference_captions:
+            reference_captions[d["image_id"]] = []
+        reference_captions[d["image_id"]].append(d["caption"])
+    reference_captions = sorted(reference_captions.items(), key=lambda x: x[0])
+    return list(reference_captions.values())
+
+
 def benchmark_model_captioning_processed_dataloader(
     model: ModelType,
     processor: ProcessorType,
@@ -69,7 +143,7 @@ def benchmark_model_captioning_processed_dataloader(
     save_captions_path: Optional[str] = None,
 ) -> Dict[str, float]:
     """Benchmark model performance on captioning task with optional output saving."""
-    
+
     print("\n+-+-+-🔤 Captioning dataset+-+-+-+\n")
     dataset_size = len(processed_dataloader.dataset)
     progress_bar = tqdm(total=dataset_size, desc="Processing samples", unit="sample")
@@ -82,7 +156,7 @@ def benchmark_model_captioning_processed_dataloader(
     ground_truth_annotations = []
     annotation_id = 0
     sample_idx = 0
-    
+
     # Initialize captions for saving if requested
     captions_to_save = []
     if save_captions_path:
@@ -113,9 +187,10 @@ def benchmark_model_captioning_processed_dataloader(
                 "image_id": real_image_id,
                 "caption": predicted_captions[batch_sample_idx],
             }
-            
+
             # Store caption for saving if requested
             if save_captions_path:
+                # todo: check if I can remove this list since it is the same as generated_captions
                 captions_to_save[sample_idx] = {
                     "image_id": real_image_id,
                     "caption": predicted_captions[batch_sample_idx],
@@ -134,14 +209,14 @@ def benchmark_model_captioning_processed_dataloader(
                     }
                 )
                 annotation_id += 1
-            
+
             sample_idx += 1
-        
+
         # Update progress bar
         if sample_idx % update_every == 0 or sample_idx == dataset_size:
             progress_bar.update(sample_idx - last_update)
             last_update = sample_idx
-    
+
     progress_bar.close()
     torch.cuda.empty_cache()
     gc.collect()
@@ -158,7 +233,7 @@ def benchmark_model_captioning_processed_dataloader(
         "images": ground_truth_images,
         "annotations": ground_truth_annotations,
     }
-    
+
     # Create temporary files for COCO evaluation
     with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as f_gt:
         json.dump(ground_truth_coco_format, f_gt)
@@ -168,6 +243,15 @@ def benchmark_model_captioning_processed_dataloader(
         json.dump(generated_captions, f_res)
         results_path = f_res.name
 
+    # todo:
+    # !Move model to CPU
+    # !Load CLIP model for evaluation
+    # !Evaluate captions using CLIP
+    # !Move model back to GPU
+    # !Compute CLIP scores
+    # !Compute BERT scores
+    # !Return the results
+
     # Evaluate captions using COCO metrics
     print("\n+-+-+-📝 Evaluating captions+-+-+-+\n")
     with open(os.devnull, "w") as fnull, contextlib.redirect_stdout(fnull):
@@ -176,7 +260,7 @@ def benchmark_model_captioning_processed_dataloader(
         coco_eval = COCOEvalCap(coco, coco_result)
         coco_eval.params["image_id"] = coco_result.getImgIds()
         coco_eval.evaluate()
-    
+
     return {
         "BLEU-1": coco_eval.eval["Bleu_1"],
         "BLEU-2": coco_eval.eval["Bleu_2"],

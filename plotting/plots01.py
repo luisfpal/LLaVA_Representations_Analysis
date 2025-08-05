@@ -851,13 +851,16 @@ def plot_all_transplanting_layers_benchmarking(
 def _extract_max_tokens_from_directory(directory_name: str) -> int:
     """
     Extract max_new_tokens value from directory name.
-    
+
     Args:
         directory_name: Directory name (e.g., 'transplanting_layers_caption_benchmarking_max_new_tokens_20')
-        
+
     Returns:
         int: Number of max_new_tokens (default: 50)
     """
+    # ! todo: change the name of the dedault directory to include the max_new_tokens
+    # todo: and then extract the max_new_tokens from the directory name and not
+    # hardcoded here
     if "max_new_tokens_20" in directory_name:
         return 20
     else:
@@ -867,31 +870,29 @@ def _extract_max_tokens_from_directory(directory_name: str) -> int:
 def _extract_caption_benchmarking_data(data_df, method, metric_name):
     """
     Extract and validate caption benchmarking data for plotting.
-    
+
     Args:
         data_df: DataFrame containing caption benchmarking results
         method: Transplantation method name
         metric_name: Name of the metric to extract
-        
+
     Returns:
         tuple: (layer_numbers, layer_metrics, fm_metric, pm_metric)
-        
+
     Raises:
         ValueError: If data structure is invalid
     """
     # Validate data structure
     if data_df.empty:
         raise ValueError(f"Empty dataframe for {method}")
-    
+
     if metric_name not in data_df.columns:
-        raise ValueError(f"Metric '{metric_name}' not found in data columns: {list(data_df.columns)}")
+        raise ValueError(
+            f"Metric '{metric_name}' not found in data columns: {list(data_df.columns)}"
+        )
 
     # Extract layer data (excluding baseline models)
-    layer_prefix = (
-        "start_layer_"
-        if "sliding_window" in method
-        else "split_layer_"
-    )
+    layer_prefix = "start_layer_" if "sliding_window" in method else "split_layer_"
 
     # Get layer entries - the layer names are in the first column
     layer_names_column = data_df.columns[0]
@@ -925,7 +926,7 @@ def _extract_caption_benchmarking_data(data_df, method, metric_name):
 
     fm_metric = fm_row[metric_name].iloc[0]
     pm_metric = pm_row[metric_name].iloc[0]
-    
+
     return layer_numbers, layer_metrics, fm_metric, pm_metric
 
 
@@ -937,7 +938,7 @@ def plot_caption_benchmarking_for_directory(
 ):
     """
     Plot caption benchmarking results for a specific metric and directory.
-    
+
     Args:
         results_loader: ResultsLoader instance with loaded data
         metric_name: Metric to plot ('CIDEr' or 'SPICE')
@@ -966,11 +967,13 @@ def plot_caption_benchmarking_for_directory(
 
         try:
             # Get caption data for this method from specific directory
-            data_df = results_loader.get_caption_benchmarking(dataset_name, method, directory_name)
+            data_df = results_loader.get_caption_benchmarking(
+                dataset_name, method, directory_name
+            )
 
             # Extract and validate data using helper function
-            layer_numbers, layer_metrics, fm_metric, pm_metric = _extract_caption_benchmarking_data(
-                data_df, method, metric_name
+            layer_numbers, layer_metrics, fm_metric, pm_metric = (
+                _extract_caption_benchmarking_data(data_df, method, metric_name)
             )
 
             # Prepare data for plotting
@@ -1010,7 +1013,7 @@ def plot_caption_benchmarking_for_directory(
                     display_val = "0"
                 else:
                     display_val = f"{val:.2f}"
-                
+
                 ax.text(
                     pos,
                     val + 0.01,
@@ -1021,7 +1024,9 @@ def plot_caption_benchmarking_for_directory(
                 )
 
         except Exception as e:
-            print(f"⚠️  Failed to plot {method}/{metric_name} from {directory_name}: {e}")
+            print(
+                f"⚠️  Failed to plot {method}/{metric_name} from {directory_name}: {e}"
+            )
             ax.text(
                 0.5,
                 0.5,
@@ -1043,7 +1048,7 @@ def plot_caption_benchmarking_for_directory(
 
     # Extract max_new_tokens from directory name
     max_tokens = _extract_max_tokens_from_directory(directory_name)
-    
+
     # Add overall title with token information
     plt.suptitle(
         f"Transplanting layers caption benchmarking: {metric_name} (max_new_tokens={max_tokens})",
@@ -1085,7 +1090,7 @@ def plot_transplanting_layers_caption_benchmarking(
 ):
     """
     Plot caption benchmarking results for a specific metric (default directory).
-    
+
     Args:
         results_loader: ResultsLoader instance with loaded data
         metric_name: Metric to plot ('CIDEr' or 'SPICE')
@@ -1101,17 +1106,17 @@ def plot_transplanting_layers_caption_benchmarking(
 def _print_caption_benchmarking_summary(results_loader):
     """
     Print a summary of available caption benchmarking data.
-    
+
     Args:
         results_loader: ResultsLoader instance with loaded data
     """
     if "transplanting_layers_caption_benchmarking" not in results_loader.data:
         print("⚠️  No caption benchmarking data available")
         return
-    
+
     print("\n📋 Caption Benchmarking Data Summary:")
     caption_data = results_loader.data["transplanting_layers_caption_benchmarking"]
-    
+
     for dataset_name, experiments in caption_data.items():
         print(f"  📊 {dataset_name}:")
         for experiment_name in experiments.keys():
@@ -1131,9 +1136,11 @@ def plot_all_transplanting_layers_caption_benchmarking(
 
     # Available metrics
     metrics = ["CIDEr", "SPICE"]
-    
+
     # Available directories from config
-    caption_directories = results_loader.config.get("caption_benchmarking", {}).get("directories", [])
+    caption_directories = results_loader.config.get("caption_benchmarking", {}).get(
+        "directories", []
+    )
 
     for metric in metrics:
         for directory in caption_directories:
@@ -1149,56 +1156,50 @@ def plot_modalities_similarities(
 ):
     """
     Plot modalities similarities as line plots.
-    
+
     Args:
         results_loader: ResultsLoader instance with loaded data
         stream_types: List of stream types to plot (e.g., ['output_layer', 'post_mlp'])
         save_plots: Whether to save plots instead of showing them
     """
     print("\n📊 Plotting modalities similarities...")
-    
+
     if "modalities_similarities" not in results_loader.data:
         print("⚠️  No modalities similarities data loaded")
         return
-    
+
     modalities_data = results_loader.data["modalities_similarities"]
-    
+
     # Get all available models and datasets
     all_models = list(modalities_data.keys())
     all_datasets = set()
-    
+
     for model_data in modalities_data.values():
         for dataset in model_data.keys():
             all_datasets.add(dataset)
-    
+
     all_datasets = sorted(list(all_datasets))
-    
+
     # Create 1x2 subplots (shared y-axis)
     fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
-    
+
     # Handle single subplot case
     if len(all_datasets) == 1:
         axes = [axes]
-    
+
     # Define colors for models
-    model_colors = {
-        "full": "blue",
-        "pretrained": "red"
-    }
-    
+    model_colors = {"full": "blue", "pretrained": "red"}
+
     # Define linestyles for stream types
-    stream_styles = {
-        "output_layer": "-",
-        "post_mlp": "--"
-    }
-    
+    stream_styles = {"output_layer": "-", "post_mlp": "--"}
+
     # Collect all data values for Y limits
     all_data_values = []
-    
+
     # Plot data for each dataset (subplot)
     for d_idx, dataset in enumerate(all_datasets):
         ax = axes[d_idx]
-        
+
         # Plot each model and stream type combination
         for model in all_models:
             for stream_type in stream_types:
@@ -1206,31 +1207,31 @@ def plot_modalities_similarities(
                     similarity_data = results_loader.get_modalities_similarity(
                         model, dataset, stream_type
                     )
-                    
+
                     if isinstance(similarity_data, torch.Tensor):
                         similarity_data = similarity_data.numpy()
-                    
+
                     # Collect data for Y limits
                     all_data_values.extend(similarity_data)
-                    
+
                     # Create line plot
                     layers = range(len(similarity_data))
                     color = model_colors.get(model, "gray")
                     linestyle = stream_styles.get(stream_type, "-")
-                    
+
                     ax.plot(
-                        layers, 
-                        similarity_data, 
+                        layers,
+                        similarity_data,
                         color=color,
                         linestyle=linestyle,
                         linewidth=2,
-                        label=f"{model}_{stream_type}"
+                        label=f"{model}_{stream_type}",
                     )
-                    
+
                 except KeyError:
                     # Data not available for this combination
                     continue
-        
+
         # Configure subplot
         ax.set_title(f"{dataset}", fontsize=14, fontweight="bold")
         ax.set_xlabel("Layer", fontsize=12)
@@ -1240,9 +1241,9 @@ def plot_modalities_similarities(
             # Remove Y-axis elements for non-first subplots
             ax.tick_params(left=False)
             ax.set_ylabel("")
-        
+
         ax.grid(True, alpha=0.3)
-    
+
     # Set Y limits based on collected data
     if all_data_values:
         y_min = min(all_data_values)
@@ -1251,35 +1252,37 @@ def plot_modalities_similarities(
         y_range = y_max - y_min
         y_min_padded = y_min - 0.05 * y_range
         y_max_padded = y_max + 0.05 * y_range
-        
+
         for ax in axes:
             ax.set_ylim(y_min_padded, y_max_padded)
-    
+
     # Add legends only to the first subplot
     if len(all_datasets) > 0:
         first_ax = axes[0]
-        
+
         # Create custom legend for models (colors)
         from matplotlib.lines import Line2D
+
         model_legend_elements = []
         for model, color in model_colors.items():
             model_legend_elements.append(
                 Line2D([0], [0], color=color, linewidth=3, label=model)
             )
-        
+
         # Create custom legend for stream types (linestyles)
         stream_legend_elements = []
         for stream_type, linestyle in stream_styles.items():
             stream_legend_elements.append(
                 Line2D(
-                    [0], [0], 
-                    color="black", 
-                    linestyle=linestyle, 
-                    linewidth=2.5, 
-                    label=stream_type
+                    [0],
+                    [0],
+                    color="black",
+                    linestyle=linestyle,
+                    linewidth=2.5,
+                    label=stream_type,
                 )
             )
-        
+
         # Add model legend first
         model_legend = first_ax.legend(
             handles=model_legend_elements,
@@ -1292,10 +1295,10 @@ def plot_modalities_similarities(
             bbox_to_anchor=(0.0, 1),
             ncol=len(model_colors),
         )
-        
+
         # Add model legend as artist to preserve it when adding second legend
         first_ax.add_artist(model_legend)
-        
+
         # Add stream types legend second
         first_ax.legend(
             handles=stream_legend_elements,
@@ -1310,11 +1313,16 @@ def plot_modalities_similarities(
             handlelength=5.0,
             handletextpad=1.0,
         )
-    
+
     # Set overall title
-    plt.suptitle("Cosine similarity of trailing text and image embeddings", fontsize=16, fontweight="bold", y=0.98)
+    plt.suptitle(
+        "Cosine similarity of trailing text and image embeddings",
+        fontsize=16,
+        fontweight="bold",
+        y=0.98,
+    )
     plt.tight_layout()
-    
+
     filename = f"modalities_similarities_{'_'.join(stream_types)}.png"
     save_plot_if_requested(save_plots, filename)
 
@@ -1364,6 +1372,7 @@ def main(save_plots: bool = False):
     # plot_all_model_data_measures(results, save_plots=save_plots)
     # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
     plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
+    # todo: change plot_modalities_similarities from lines to scatter
     # plot_modalities_similarities(results, ["output_layer", "post_mlp"], save_plots=save_plots)
 
 

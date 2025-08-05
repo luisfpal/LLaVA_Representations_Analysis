@@ -37,7 +37,7 @@ def main():
     Each CSV contains captioning metrics (BLEU, METEOR, ROUGE-L, CIDEr, SPICE)
     for different transplantation configurations plus baseline results for both
     the original multimodal model and the model with pretrained connector.
-    
+
     When --save_baseline_outputs is used, baseline model captions are saved as JSON files:
     results/transplanting_layers_caption_benchmarking/{dataset_name}/
     ├── {multimodal_model_name}_outputs.json
