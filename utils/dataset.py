@@ -164,31 +164,32 @@ class MultipleChoiceDatasetBenchmark(Dataset):
 def extract_image_id(image_name: str) -> Optional[int]:
     """
     Extract the image id from the image name.
-    
+
     Args:
         image_name: Image filename (e.g., "COCO_val2014_000000522418.jpg")
-    
+
     Returns:
         Extracted image ID as integer, or None if extraction fails
-        
+
     Example:
         extract_image_id("COCO_val2014_000000522418.jpg") => 522418
     """
     if not image_name:
         return None
-    
+
     try:
         # Split by "2014_" and get the part after it
         if "2014_" not in image_name:
             return None
-        
+
         s = image_name.split("2014_")[1]
-        match = re.search(r'\d+', s)  # Find the first sequence of digits
+        match = re.search(r"\d+", s)  # Find the first sequence of digits
         if match:
             return int(match.group())  # Automatically removes leading zeros
         return None  # No digits found
     except (IndexError, ValueError, AttributeError):
         return None
+
 
 class OpenVQADataset(Dataset):
     """
@@ -443,7 +444,7 @@ def _format_as_conversations(questions, images, args):
     guide_text: str = ""
     if hasattr(args, "guide_text") and args.guide_text is not None:
         guide_text = f" {args.guide_text}"
-    
+
     for question_text, image in zip(questions, images):
         content = []
         if image is not None:
@@ -596,12 +597,19 @@ def collate_vqa_batch(
 
 
 def collate_captioning_batch(
-    batch, processor, chat_template_exists=True, return_captions=False, return_image_ids=False
+    batch,
+    processor,
+    chat_template_exists=True,
+    return_captions=False,
+    return_image_ids=False,
+    return_images=False,
 ):
     # Sanity check
     if return_image_ids and not return_captions:
-        raise ValueError("return_image_ids can only be True if return_captions is also True")
-    
+        raise ValueError(
+            "return_image_ids can only be True if return_captions is also True"
+        )
+
     # Custom collate function to handle images and text
     user_prompts = [item["user_prompt"] for item in batch]
     captions = [item["captions"] for item in batch]
@@ -616,7 +624,7 @@ def collate_captioning_batch(
             continue_final_message=True,
             # !"enforced" but consistent for these experiments
         )
-        
+
         prompts = format_prompts(
             # todo: rename questions to user_prompts
             # this is a backward compatibility feature
@@ -635,11 +643,16 @@ def collate_captioning_batch(
         }
 
         tokenized = processor(**processor_kwargs)
-        if return_captions and return_image_ids:
-            return tokenized, captions, image_ids
-        elif return_captions:
-            return tokenized, captions
-        return tokenized
+        # Build return tuple based on requested data
+        result = [tokenized]
+        if return_captions:
+            result.append(captions)
+        if return_image_ids:
+            result.append(image_ids)
+        if return_images:
+            result.append(images)
+        
+        return tuple(result) if len(result) > 1 else result[0]
 
     # Raw mode (default)
     return {
@@ -751,6 +764,7 @@ def get_dataloader_for_captioning(
     chat_template_exists: bool = True,
     return_captions: bool = False,
     return_image_ids: bool = False,
+    return_images: bool = False,
 ):
     dataset = ImageCaptioningDataset(
         dataset_path_or_name=dataset_path_or_name,
@@ -764,6 +778,7 @@ def get_dataloader_for_captioning(
         chat_template_exists=chat_template_exists,
         return_captions=return_captions,
         return_image_ids=return_image_ids,
+        return_images=return_images,
     )
 
     return DataLoader(

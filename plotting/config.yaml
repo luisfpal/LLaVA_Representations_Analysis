@@ -2,7 +2,7 @@
 
 # File paths
 paths:
-  results: "../results"
+  results: "../results_coco_captioning"
 
 # Model name mappings
 models:
@@ -11,8 +11,8 @@ models:
 
 # Available datasets
 datasets:
-  - "cocoqa_img"
-  - "cocoqa_txt"
+  # - "cocoqa_img"
+  # - "cocoqa_txt"
   - "coco_captioning"
 
 # Analysis parameters
@@ -34,6 +34,6 @@ modalities_similarities:
 # Caption benchmarking configuration
 caption_benchmarking:
   directories:
-    - "transplanting_layers_caption_benchmarking"
     - "transplanting_layers_caption_benchmarking_max_new_tokens_20"
+    - "transplanting_layers_caption_benchmarking_max_new_tokens_50"
   experiment_types: ["sliding_window", "two_parts"]

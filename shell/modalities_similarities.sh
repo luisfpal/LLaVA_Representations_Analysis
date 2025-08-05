@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script runs modalities cosine similarity analysis
+# This script runs modalities similarities analysis
 
 # --- Configuration Section ---
 DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
@@ -7,10 +7,17 @@ DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 # Analysis configuration
 RESIDUAL_STREAM_TYPES="output_layer,post_mlp"
 DATASET_TYPE="coco_captioning,cocoqa_img"
+# DATASET_TYPE="coco_captioning"
 
 # Processing parameters
 BATCH_SIZE="25"
 SEED="42"
+
+# Homogeneity score parameters
+MAXK="128"
+RANGE_MAX="128"
+K="16"
+Z="1.65"
 
 # Directory configuration
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
@@ -18,7 +25,7 @@ RESULTS_DIR="$PROJECT_DIR/results"
 MODEL_CACHE_DIR="$HOME/scratch/huggingface/hub"
 
 # Script configuration
-FILENAME="modalities_cosine_similarity.py"
+FILENAME="modalities_similarities.py"
 FILEPATH="$PROJECT_DIR/scripts/$FILENAME"
 
 # --- Argument Construction ---
@@ -29,6 +36,10 @@ SCRIPT_ARGS+=(--model-cache-dir "$MODEL_CACHE_DIR")
 SCRIPT_ARGS+=(--batch-size "$BATCH_SIZE")
 SCRIPT_ARGS+=(--dataset-type "$DATASET_TYPE")
 SCRIPT_ARGS+=(--residual-stream-types "$RESIDUAL_STREAM_TYPES")
+SCRIPT_ARGS+=(--maxk "$MAXK")
+SCRIPT_ARGS+=(--range-max "$RANGE_MAX")
+SCRIPT_ARGS+=(--k "$K")
+SCRIPT_ARGS+=(--Z "$Z")
 SCRIPT_ARGS+=(--seed "$SEED")
 
 # --- Debugger ---
@@ -42,18 +53,23 @@ fi
 mkdir -p "$RESULTS_DIR"
 
 # Print configuration
-echo "====== Modalities Cosine Similarity Analysis Configuration ======"
+echo "====== Modalities Similarities Analysis Configuration ======"
 echo "Dataset: $DATASET_PATH_OR_NAME"
 echo "Results directory: $RESULTS_DIR"
 echo "Model cache directory: $MODEL_CACHE_DIR"
 echo "Residual stream types: $RESIDUAL_STREAM_TYPES"
 echo "Dataset type: $DATASET_TYPE"
 echo "Batch size: $BATCH_SIZE"
+echo "Homogeneity score parameters:"
+echo "  - maxk: $MAXK"
+echo "  - range_max: $RANGE_MAX"
+echo "  - k: $K"
+echo "  - Z: $Z"
 echo "Seed: $SEED"
 echo "==============================="
 
 # Run analysis
-echo -e "\n====== Running Modalities Cosine Similarity Analysis ======"
+echo -e "\n====== Running Modalities Similarities Analysis ======"
 
 # Set PyTorch memory config
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True

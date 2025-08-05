@@ -11,6 +11,8 @@ rm install_uv.sh
 
 # Install dependencies
 uv sync
+# ! This might break depending on the GPU architecture and cluster settings
+# ! For the settings of the DGX node in the ORFEO cluster this works fine
 uv pip install flash-attn==2.5.7 --no-build-isolation
 
 # Activate the environment

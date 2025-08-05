@@ -571,82 +571,113 @@ class ResultsLoader:
     def _load_modalities_similarities(self) -> Dict[str, Any]:
         """Load modalities similarities data from specific datasets."""
         modalities_similarities = {}
-        
+
         # Get datasets that contain modalities similarities
-        datasets_with_modalities = self.config.get("modalities_similarities", {}).get("datasets_with_modalities", [])
-        
+        datasets_with_modalities = self.config.get("modalities_similarities", {}).get(
+            "datasets_with_modalities", []
+        )
+
         for dataset in datasets_with_modalities:
             dataset_dir = self.results_dir / dataset
-            
+
             if not dataset_dir.exists():
                 print(f"⚠️  Dataset directory not found: {dataset}")
                 continue
-                
+
             # Look for model directories within the dataset
             for model_dir in dataset_dir.iterdir():
                 if not model_dir.is_dir():
                     continue
-                    
+
                 model_name = model_dir.name
                 model_key = self.config["models"].get(model_name, model_name)
-                
+
                 # Initialize model structure if not exists
                 if model_key not in modalities_similarities:
                     modalities_similarities[model_key] = {}
-                    
+
                 modalities_dir = model_dir / "modalities_similarity"
                 if not modalities_dir.exists():
                     continue
-                    
+
                 # Initialize dataset structure
                 modalities_similarities[model_key][dataset] = {}
-                
+
                 # Load safetensors files
                 for file_path in modalities_dir.glob("*.safetensors"):
                     filename = file_path.stem
-                    
+
                     try:
                         data = load_file(str(file_path))
                     except Exception as e:
                         print(f"⚠️  Failed to load {filename}: {e}")
                         continue
-                    
-                    # Extract stream type from filename (e.g., "output_layer_sample" -> "output_layer")
-                    stream_type = filename.replace("_sample", "")
-                    
-                    # Store the layers_cosine_similarity tensor
-                    if "layers_cosine_similarity" in data:
-                        modalities_similarities[model_key][dataset][stream_type] = data["layers_cosine_similarity"]
+
+                    # Extract stream type and similarity type from filename
+                    # e.g., "output_layer_sample_cosine_similarity" -> "output_layer", "cosine_similarity"
+                    # e.g., "output_layer_sample_homogeneity_score" -> "output_layer", "homogeneity_score"
+                    if "_cosine_similarity" in filename:
+                        stream_type = filename.replace("_sample_cosine_similarity", "")
+                        similarity_type = "cosine_similarity"
+                    elif "_homogeneity_score" in filename:
+                        stream_type = filename.replace("_sample_homogeneity_score", "")
+                        similarity_type = "homogeneity_score"
                     else:
-                        print(f"⚠️  No layers_cosine_similarity found in {filename}")
-        
+                        # Legacy support for old format
+                        stream_type = filename.replace("_sample", "")
+                        similarity_type = "cosine_similarity"
+
+                    # Initialize stream type structure if not exists
+                    if stream_type not in modalities_similarities[model_key][dataset]:
+                        modalities_similarities[model_key][dataset][stream_type] = {}
+
+                    # Store the appropriate tensor based on similarity type
+                    if (
+                        similarity_type == "cosine_similarity"
+                        and "layers_cosine_similarity" in data
+                    ):
+                        modalities_similarities[model_key][dataset][stream_type][
+                            "cosine_similarity"
+                        ] = data["layers_cosine_similarity"]
+                    elif (
+                        similarity_type == "homogeneity_score"
+                        and "layers_homogeneity_scores" in data
+                    ):
+                        modalities_similarities[model_key][dataset][stream_type][
+                            "homogeneity_score"
+                        ] = data["layers_homogeneity_scores"]
+                    else:
+                        print(f"⚠️  No {similarity_type} data found in {filename}")
+
         return modalities_similarities
 
-    def _load_caption_benchmarking_directory(self, directory_name: str) -> Dict[str, Any]:
+    def _load_caption_benchmarking_directory(
+        self, directory_name: str
+    ) -> Dict[str, Any]:
         """Load caption benchmarking results from a specific directory."""
         caption_benchmarking = {}
         caption_dir = self.results_dir / directory_name
-        
+
         if not caption_dir.exists():
             print(f"⚠️  No caption benchmarking results found in {directory_name}")
             return caption_benchmarking
-            
+
         for dataset_dir in caption_dir.iterdir():
             if not dataset_dir.is_dir():
                 continue
-                
+
             dataset_name = dataset_dir.name
             caption_benchmarking[dataset_name] = {}
-            
+
             for file_path in dataset_dir.glob("*.csv"):
                 filename = file_path.stem
-                
+
                 try:
                     data = pd.read_csv(file_path)
                 except Exception as e:
                     print(f"⚠️  Failed to load {filename}: {e}")
                     continue
-                
+
                 # Extract experiment type and parameters
                 if "sliding_window" in filename:
                     key = filename.split("sliding_window_")[-1]
@@ -654,29 +685,31 @@ class ResultsLoader:
                 elif "two_parts" in filename:
                     key = filename.split("two_parts_")[-1]
                     caption_benchmarking[dataset_name][f"two_parts_{key}"] = data
-        
+
         return caption_benchmarking
 
     def _load_transplanting_layers_caption_benchmarking(self) -> Dict[str, Any]:
         """Load all caption benchmarking experiment results from configured directories."""
         all_caption_benchmarking = {}
-        
+
         # Get configured caption benchmarking directories
-        caption_directories = self.config.get("caption_benchmarking", {}).get("directories", [])
-        
+        caption_directories = self.config.get("caption_benchmarking", {}).get(
+            "directories", []
+        )
+
         for directory_name in caption_directories:
             directory_data = self._load_caption_benchmarking_directory(directory_name)
-            
+
             # Merge data with directory name as prefix to avoid conflicts
             for dataset_name, experiments in directory_data.items():
                 if dataset_name not in all_caption_benchmarking:
                     all_caption_benchmarking[dataset_name] = {}
-                
+
                 for experiment_name, experiment_data in experiments.items():
                     # Create unique key with directory prefix
                     unique_key = f"{directory_name}_{experiment_name}"
                     all_caption_benchmarking[dataset_name][unique_key] = experiment_data
-        
+
         return all_caption_benchmarking
 
     # === Data Access Methods ===
@@ -750,19 +783,37 @@ class ResultsLoader:
             raise KeyError(f"Transplant data not found: {dataset}/{experiment}")
 
     def get_modalities_similarity(
-        self, model: str, dataset: str, stream_type: str
+        self,
+        model: str,
+        dataset: str,
+        stream_type: str,
+        similarity_type: str = "cosine_similarity",
     ) -> torch.Tensor:
-        """Get modalities similarity data."""
+        """Get modalities similarity data.
+
+        Args:
+            model: Model name
+            dataset: Dataset name
+            stream_type: Stream type (e.g., "output_layer", "post_mlp")
+            similarity_type: Type of similarity ("cosine_similarity" or "homogeneity_score")
+
+        Returns:
+            torch.Tensor: Similarity data for the specified type
+        """
         try:
-            return self.data["modalities_similarities"][model][dataset][stream_type]
+            return self.data["modalities_similarities"][model][dataset][stream_type][
+                similarity_type
+            ]
         except KeyError:
-            raise KeyError(f"Modalities similarity data not found: {model}/{dataset}/{stream_type}")
+            raise KeyError(
+                f"Modalities similarity data not found: {model}/{dataset}/{stream_type}/{similarity_type}"
+            )
 
     def get_caption_benchmarking(
         self, dataset: str, experiment: str, directory_name: str = None
     ) -> pd.DataFrame:
         """Get caption benchmarking experiment results.
-        
+
         Args:
             dataset: Dataset name (e.g., "coco_captioning")
             experiment: Experiment name (e.g., "sliding_window_ws2_s2")
@@ -773,18 +824,26 @@ class ResultsLoader:
             if directory_name:
                 # Look for specific directory
                 full_experiment_name = f"{directory_name}_{experiment}"
-                return self.data["transplanting_layers_caption_benchmarking"][dataset][full_experiment_name]
+                return self.data["transplanting_layers_caption_benchmarking"][dataset][
+                    full_experiment_name
+                ]
             else:
                 # Look for experiment in any available directory
-                available_experiments = self.data["transplanting_layers_caption_benchmarking"][dataset]
+                available_experiments = self.data[
+                    "transplanting_layers_caption_benchmarking"
+                ][dataset]
                 for exp_name, exp_data in available_experiments.items():
                     if exp_name.endswith(f"_{experiment}"):
                         return exp_data
-                
+
                 # If not found, try exact match
-                return self.data["transplanting_layers_caption_benchmarking"][dataset][experiment]
+                return self.data["transplanting_layers_caption_benchmarking"][dataset][
+                    experiment
+                ]
         except KeyError:
-            raise KeyError(f"Caption benchmarking data not found: {dataset}/{experiment}")
+            raise KeyError(
+                f"Caption benchmarking data not found: {dataset}/{experiment}"
+            )
 
     # === Summary Methods ===
 
@@ -852,11 +911,15 @@ class ResultsLoader:
             for model, datasets in self.data["modalities_similarities"].items():
                 print(f"  {model}:")
                 for dataset, stream_types in datasets.items():
-                    print(f"    {dataset}: {list(stream_types.keys())}")
+                    print(f"    {dataset}:")
+                    for stream_type, similarity_types in stream_types.items():
+                        print(f"      {stream_type}: {list(similarity_types.keys())}")
 
         if "transplanting_layers_caption_benchmarking" in self.data:
             print("\n🔄 CAPTION BENCHMARKING:")
-            for dataset, exps in self.data["transplanting_layers_caption_benchmarking"].items():
+            for dataset, exps in self.data[
+                "transplanting_layers_caption_benchmarking"
+            ].items():
                 print(f"  {dataset}: {list(exps.keys())}")
 
         print("\n" + "=" * 50)

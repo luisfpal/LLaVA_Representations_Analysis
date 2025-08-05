@@ -10,6 +10,8 @@ from transformers import (
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
     AutoTokenizer,
+    CLIPProcessor,
+    CLIPModel,
     # LlamaForCausalLM,
     # LlamaTokenizerFast
 )
@@ -32,12 +34,13 @@ SUPPORTED_VL_MODELS = {
 }
 
 # Define types for clarity
-ProcessorType = Union[LlavaProcessor, LlavaNextProcessor, PaliGemmaProcessor]
+ProcessorType = Union[LlavaProcessor, LlavaNextProcessor, PaliGemmaProcessor, CLIPProcessor]
 ModelType = Union[
     LlavaForConditionalGeneration,
     LlavaNextForConditionalGeneration,
     PaliGemmaForConditionalGeneration,
     AutoModelForCausalLM,
+    CLIPModel,
 ]
 
 
@@ -115,7 +118,12 @@ def load_hf_model_and_processor_or_tokenizer(
             ProcessorClass = AutoTokenizer
             ModelClass = AutoModelForCausalLM
     except ValueError as e:
-        raise e  # Re-raise the specific ValueError
+        if "clip" in model_name_or_path.lower():
+            ProcessorClass = CLIPProcessor
+            ModelClass = CLIPModel
+        else:
+            raise e
+        
 
     processor_kwargs = {
         "pretrained_model_name_or_path": model_name_or_path,
@@ -161,6 +169,9 @@ def load_hf_model_and_processor_or_tokenizer(
         return processor
     elif skip_processor:
         return model
+    
+    if "clip" in model_name_or_path.lower():
+        return model, processor
     
     if hasattr(processor, "padding_side"):
         processor.padding_side = "left"
