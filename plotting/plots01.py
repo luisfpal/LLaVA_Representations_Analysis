@@ -11,7 +11,7 @@ from config_results_loader import ResultsLoader
 DEFAULT_MEASURES = ["neighborhood_overlap", "linear_cka"]
 DEFAULT_POOLING_METHODS = ["last", "mean"]
 PROMPT_ENTROPY_POOLING = ["none"]
-PLOTS_DIR = Path(__file__).parent.parent / "plots"
+PLOTS_DIR = Path(__file__).parent.parent / "plots_coco_captioning"
 
 
 def save_plot_if_requested(save_plots: bool, filename: str):
@@ -608,18 +608,32 @@ def template_plot_model_data_measures(
                     label=pooling,
                 )
             )
+            
+        data_measures_kwargs = {
+            "datasets": {},
+            "pooling_methods": {},
+        }
+        if("coco_captioning" in datasets and dataset_measure == "intrinsic_dimension"):
+            data_measures_kwargs["datasets"]["loc"] = "upper right"
+            data_measures_kwargs["datasets"]["bbox_to_anchor"] = (1, 0.95)
+            data_measures_kwargs["pooling_methods"]["loc"] = "upper right"
+            data_measures_kwargs["pooling_methods"]["bbox_to_anchor"] = (1, 1.0)
+        else:
+            data_measures_kwargs["datasets"]["loc"] = "lower right"
+            data_measures_kwargs["datasets"]["bbox_to_anchor"] = (1, 0.0)
+            data_measures_kwargs["pooling_methods"]["loc"] = "lower right"
+            data_measures_kwargs["pooling_methods"]["bbox_to_anchor"] = (1, 0.05)
 
         # Add dataset legend first
         dataset_legend = first_ax.legend(
             handles=dataset_legend_elements,
-            loc="lower right",
             fontsize=9,
             title_fontsize=10,
             frameon=True,
             fancybox=True,
             shadow=True,
-            bbox_to_anchor=(1, 0.0),
             ncol=len(datasets),
+            **data_measures_kwargs["datasets"]
         )
 
         # Add dataset legend as artist to preserve it when adding second legend
@@ -628,16 +642,15 @@ def template_plot_model_data_measures(
         # Add pooling methods legend second
         first_ax.legend(
             handles=pooling_legend_elements,
-            loc="lower right",
             fontsize=9,
             title_fontsize=10,
             frameon=True,
             fancybox=True,
             shadow=True,
-            bbox_to_anchor=(1, 0.05),
             ncol=len(pooling_methods),
             handlelength=5.0,
             handletextpad=1.0,
+            **data_measures_kwargs["pooling_methods"]
         )
 
     # Set overall title
@@ -1363,32 +1376,43 @@ def main(save_plots: bool = False):
     results = ResultsLoader()
     results.load_all()
     results.print_summary()
+    
+    # Get the dataset names from the config
+    dataset_names = results.config["datasets"]
+    
+    if ("cocoqa_txt" in dataset_names) and ("cocoqa_img" in dataset_names):
 
-    # Create similarities difference dataset using renamed method
-    results.create_similarities_difference_dataset(
-        source_dataset1="cocoqa_txt",
-        source_dataset2="cocoqa_img",
-        target_dataset="cocoqa_txt_minus_cocoqa_img",
-        verbose=False,
-    )
+        # Create similarities difference dataset using renamed method
+        results.create_similarities_difference_dataset(
+            source_dataset1="cocoqa_txt",
+            source_dataset2="cocoqa_img",
+            target_dataset="cocoqa_txt_minus_cocoqa_img",
+            verbose=False,
+        )
 
-    # Compute mean heads projections at layers using renamed method
-    results.compute_mean_heads_projections_at_layers()
+        # Compute mean heads projections at layers using renamed method
+        results.compute_mean_heads_projections_at_layers()
 
-    # Create model measures differences for each dataset
-    print("\n🔄 Creating model measures differences...")
+        # Create model measures differences for each dataset
+        print("\n🔄 Creating model measures differences...")
 
-    # Create model measures differences using renamed method
-    results.create_dataset_measures_models_difference(
-        dataset_name="cocoqa_txt",
-        model1="pretrained",
-        model2="full",
-    )
-    results.create_dataset_measures_models_difference(
-        dataset_name="cocoqa_img",
-        model1="pretrained",
-        model2="full",
-    )
+        # Create model measures differences using renamed method
+        results.create_dataset_measures_models_difference(
+            dataset_name="cocoqa_txt",
+            model1="pretrained",
+            model2="full",
+        )
+        results.create_dataset_measures_models_difference(
+            dataset_name="cocoqa_img",
+            model1="pretrained",
+            model2="full",
+        )
+    elif "coco_captioning" in dataset_names:
+        results.create_dataset_measures_models_difference(
+            dataset_name="coco_captioning",
+            model1="pretrained",
+            model2="full",
+        )
 
     results.print_summary()
 
@@ -1399,21 +1423,21 @@ def main(save_plots: bool = False):
     # plot_all_output_layer_similarity_measures(results, save_plots=save_plots)
     # plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
     # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
-    # plot_all_model_data_measures(results, save_plots=save_plots)
+    plot_all_model_data_measures(results, save_plots=save_plots)
     # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
     # plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
-    plot_modalities_similarities(
-        results,
-        ["output_layer", "post_mlp"],
-        "cosine_similarity",
-        save_plots=save_plots,
-    )
-    plot_modalities_similarities(
-        results,
-        ["output_layer", "post_mlp"],
-        "homogeneity_score",
-        save_plots=save_plots,
-    )
+    # plot_modalities_similarities(
+    #     results,
+    #     ["output_layer", "post_mlp"],
+    #     "cosine_similarity",
+    #     save_plots=save_plots,
+    # )
+    # plot_modalities_similarities(
+    #     results,
+    #     ["output_layer", "post_mlp"],
+    #     "homogeneity_score",
+    #     save_plots=save_plots,
+    # )
 
 
 if __name__ == "__main__":
