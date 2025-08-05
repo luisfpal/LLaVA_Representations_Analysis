@@ -6,6 +6,7 @@ from dadapy.data import Data
 from anatome.similarity import svcca_distance
 from tqdm import tqdm
 import torch.nn.functional as F
+from sklearn.metrics import homogeneity_completeness_v_measure
 
 
 def _ensure_device(
@@ -948,32 +949,105 @@ def compute_heads_projection_residual_stream_similarities(
 
 
 def compute_layers_cosine_similarity(
-    tensor1: torch.Tensor, 
-    tensor2: torch.Tensor
+    tensor1: torch.Tensor, tensor2: torch.Tensor
 ) -> torch.Tensor:
     """
     Compute cosine similarity between two tensors across layers and return median similarity per layer.
-    
+
     Args:
         tensor1: First tensor of shape (layers, samples, hidden_dim)
         tensor2: Second tensor of shape (layers, samples, hidden_dim)
-    
+
     Returns:
         Tensor of shape (layers,) containing median cosine similarity for each layer
     """
     # Validate input shapes
     if tensor1.shape != tensor2.shape:
-        raise ValueError(f"Tensors must have the same shape. Got {tensor1.shape} and {tensor2.shape}")
-    
+        raise ValueError(
+            f"Tensors must have the same shape. Got {tensor1.shape} and {tensor2.shape}"
+        )
+
     if len(tensor1.shape) != 3:
         raise ValueError(f"Expected 3D tensors, got shape {tensor1.shape}")
-    
+
     # Compute cosine similarity using F.cosine_similarity
     # Shape: (layers, samples)
     cosine_similarities = F.cosine_similarity(tensor1, tensor2, dim=-1)
-    
+
     # Compute median across samples for each layer
     # Shape: (layers,)
     median_similarities = torch.median(cosine_similarities, dim=1).values
-    
+
     return median_similarities
+
+
+def compute_layers_homogeneity_score(
+    X_tensor: torch.Tensor,
+    Y_tensor: torch.Tensor,
+    maxk: int = 128,
+    range_max: int = 128,
+    k: int = 16,
+    Z: int = 1.65,
+) -> dict:
+    """
+    Compute homogeneity score between two tensors across layers and return homogeneity score per layer.
+
+    Args:
+        X_tensor: First tensor of shape (layers, samples, hidden_dim)
+        Y_tensor: Second tensor of shape (layers, samples, hidden_dim)
+
+    Returns:
+        Tensor of shape (layers,) containing homogeneity score for each layer
+    """
+    # Validate input shapes
+    if X_tensor.shape != Y_tensor.shape:
+        raise ValueError(
+            f"Tensors must have the same shape. Got {X_tensor.shape} and {Y_tensor.shape}"
+        )
+
+    if len(X_tensor.shape) != 3:
+        raise ValueError(f"Expected 3D tensors, got shape {X_tensor.shape}")
+
+    num_layers = X_tensor.shape[0]
+    num_samples = X_tensor.shape[1]
+    homogeneity_scores = torch.zeros(num_layers, dtype=torch.float64)
+
+    with torch.no_grad():
+        # Unify the data into the same sample space
+        data_tensor = torch.cat([X_tensor, Y_tensor], dim=1)
+
+        for layer in range(num_layers):
+            layer_data = data_tensor[layer, :, :]
+            # Preprocess data
+            layer_data, _ = _preprocess_data(
+                layer_data,
+                layer_data,
+                output_format="tensor",
+                remove_duplicates=False,
+            )
+            layer_data = _ensure_device(layer_data)
+            layer_data = layer_data.to(torch.float64)
+
+            # Compute euclidean distances
+            distances = torch.cdist(layer_data, layer_data, p=2).cpu().numpy()
+
+            # Compute intrinsic dimension
+            data_dadapy = Data(distances=distances, maxk=maxk)
+            id_list, _, _ = data_dadapy.return_id_scaling_gride(range_max=range_max)
+            id_index = int(math.log2(k)) - 1
+            data_dadapy.set_id(id_list[id_index])
+            data_dadapy.compute_density_kNN(k=k)
+            clusters_AdvancedDensityPeak = data_dadapy.compute_clustering_ADP(Z=Z)
+
+            # Create labels for the clustering
+            labels = np.zeros(num_samples * 2)
+            labels[:num_samples] = 1.0
+
+            # Compute homogeneity score
+            log_homogeneity_score = homogeneity_completeness_v_measure(
+                labels,
+                clusters_AdvancedDensityPeak,
+            )
+            homogeneity_scores[layer] = log_homogeneity_score[0]
+
+    return homogeneity_scores

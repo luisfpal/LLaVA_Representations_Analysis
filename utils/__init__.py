@@ -32,6 +32,7 @@ from .metrics_utils import (
     compute_heads_projection_residual_stream_similarities,
     compute_layers_intrinsic_dimension,
     compute_layers_cosine_similarity,
+    compute_layers_homogeneity_score,
 )
 from .model_utils import (
     load_hf_model_and_processor_or_tokenizer,
@@ -85,6 +86,7 @@ __all__ = [
     "compute_heads_projection_residual_stream_similarities",
     "compute_layers_intrinsic_dimension",
     "compute_layers_cosine_similarity",
+    "compute_layers_homogeneity_score",
     "load_hf_model_and_processor_or_tokenizer",
     "resolve_layer_indices",
     "replace_multimodal_lm",

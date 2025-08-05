@@ -9,6 +9,7 @@ from src.residual_stream_tracer import residual_stream_tracer
 from utils import (
     setup_multimodal_model,
     get_dataloader,
+    get_dataloader_for_captioning,
     seed_all,
     compute_layers_residual_stream_similarities,
     compute_heads_projection_residual_stream_similarities,
@@ -55,6 +56,9 @@ DATASETS = {
     "cocoqa_img": {
         "images_qa": True,
         **COCOQA_DATASET_ARGS,
+    },
+    "coco_captioning": {
+        "downsample_size": 2500,
     },
 }
 
@@ -177,6 +181,14 @@ def main():
 
     # Analysis configuration
     parser.add_argument(
+        "--dataset-type",
+        type=str,
+        default="cocoqa_txt,cocoqa_img",
+        help=f"Comma-separated list of dataset types to process. "
+        f"Valid options: {', '.join(sorted(DATASETS.keys()))}. "
+        f"If not specified, cocoqa_txt and cocoqa_img will be processed.",
+    )
+    parser.add_argument(
         "--residual-stream-types",
         type=str,
         default=None,
@@ -216,6 +228,7 @@ def main():
 
     # Validate and parse arguments
     try:
+        dataset_types = parse_list_argument(args.dataset_type, DATASETS.keys())
         residual_stream_types = parse_list_argument(
             args.residual_stream_types, RESIDUAL_STREAM_TYPE
         )
@@ -240,6 +253,9 @@ def main():
     results_dir = os.path.expanduser(args.results_dir)
 
     print(
+        f"🔧 Processing {len(dataset_types)} dataset types: {dataset_types}"
+    )
+    print(
         f"🔧 Processing {len(residual_stream_types)} residual stream types: {residual_stream_types}"
     )
     print(
@@ -248,7 +264,7 @@ def main():
 
     count = 0
     num_combinations = (
-        len(residual_stream_types) * len(tokens_pooling_methods) * len(DATASETS)
+        len(residual_stream_types) * len(tokens_pooling_methods) * len(dataset_types)
     )
 
     # Process each combination of residual stream type and token pooling method
@@ -272,7 +288,8 @@ def main():
             # Determine if we need deep copy (only False for "none" pooling to save memory)
             return_deepcopy = tokens_pooling_method != "none"
 
-            for dataset_name, dataset_args in DATASETS.items():
+            for dataset_name in dataset_types:
+                dataset_args = DATASETS[dataset_name]
                 print(f"\n{'*' * 60}")
                 print(f"📊 Processing dataset: {dataset_name}")
                 print(f"{'*' * 60}")
@@ -310,12 +327,20 @@ def main():
                         }
                     )
 
+                    # ! Don't touch this comments
                     # Get dataloader for current dataset
                     # !this is the same dataloader for the models in the loop
                     # this is a minimal overhead since here it doesn't consume much memory nor time
                     # !not so neat but it works for now
                     # todo: redesign the interface if used in the future
-                    processed_dataloader = get_dataloader(
+                    
+                    # Select appropriate dataloader function based on dataset type
+                    if dataset_name == "coco_captioning":
+                        get_dataloader_func = get_dataloader_for_captioning
+                    else:
+                        get_dataloader_func = get_dataloader
+                    
+                    processed_dataloader = get_dataloader_func(
                         **{
                             **dataset_args,
                             "dataset_path_or_name": args.dataset_path_or_name,

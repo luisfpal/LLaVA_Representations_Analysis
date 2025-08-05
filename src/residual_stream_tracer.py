@@ -878,8 +878,6 @@ def residual_stream_tracer(
         ValueError: If processed_dataloader is empty
     """
 
-    # todo: consider modifying to allow pass a raw dataloader and a processed dataloader
-
     # Parameter validation
     if residual_stream_type not in VALID_RESIDUAL_STREAM_TYPES:
         raise ValueError(

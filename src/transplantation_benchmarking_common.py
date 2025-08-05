@@ -188,7 +188,7 @@ def benchmark_baseline_models(
     return baseline_model_results, pretrained_connector_results
 
 
-def create_benchmark_model_wrapper(benchmark_func: Callable) -> Callable:
+def create_benchmark_model_wrapper(benchmark_func: Callable, args: argparse.Namespace) -> Callable:
     """Create a wrapper for the benchmark function with GPU device management."""
     def benchmark_model(
         model,
@@ -206,10 +206,17 @@ def create_benchmark_model_wrapper(benchmark_func: Callable) -> Callable:
             "processor": processor,
             "max_new_tokens": max_new_tokens,
         }
+        
+        # Add CLIP parameters for captioning tasks
         if "captioning" in benchmark_func.__name__:
             benchmark_func_kwargs["save_captions_path"] = save_outputs_path
+            benchmark_func_kwargs["clip_model_name_or_path"] = getattr(args, 'clip_model_name_or_path', "openai/clip-vit-large-patch14-336")
+            benchmark_func_kwargs["clip_cache_dir"] = getattr(args, 'clip_cache_dir', "~/scratch/huggingface/hub")
+            benchmark_func_kwargs["clip_weight"] = getattr(args, 'clip_weight', 2.5)
+            benchmark_func_kwargs["clip_batch_size"] = getattr(args, 'clip_batch_size', 16)
         elif "vqa" in benchmark_func.__name__:
             benchmark_func_kwargs["save_answers_path"] = save_outputs_path
+            
         results = benchmark_func(**benchmark_func_kwargs)
 
         model.to("cpu")
@@ -252,7 +259,7 @@ def run_transplantation_benchmarking(
     os.makedirs(benchmarking_results_dir, exist_ok=True)
 
     # Create benchmark model wrapper
-    benchmark_model = create_benchmark_model_wrapper(benchmark_func)
+    benchmark_model = create_benchmark_model_wrapper(benchmark_func, args)
 
     # Process each dataset
     for dataset_name, dataset_args in dataset_config.items():
@@ -352,6 +359,19 @@ def create_common_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save_baseline_outputs", action="store_true",
                        help="Save baseline model outputs (captions/answers) to JSON files")
+    
+    # CLIP evaluation parameters
+    parser.add_argument("--clip_model_name_or_path", type=str, 
+                       default="openai/clip-vit-large-patch14-336",
+                       help="CLIP model name or path for evaluation")
+    parser.add_argument("--clip_cache_dir", type=str, 
+                       default="~/scratch/huggingface/hub",
+                       help="Cache directory for CLIP model")
+    parser.add_argument("--clip_weight", type=float, default=2.5,
+                       help="Weight for CLIP score computation")
+    parser.add_argument("--clip_batch_size", type=int, default=16,
+                       help="Batch size for CLIP evaluation")
+    
     return parser
 
 
