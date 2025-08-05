@@ -130,7 +130,7 @@ def main():
     │   │   ├── modalities_similarity/
     │   │   │   └── <stream_type>_sample_cosine_similarity.safetensors
     │   │   │   └── <stream_type>_sample_homogeneity_score.safetensors
-    
+
     ! Comment: 🤦‍♂️ a better structure would have been:
     results/
     ├── modalities_similarities/
@@ -378,4 +378,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

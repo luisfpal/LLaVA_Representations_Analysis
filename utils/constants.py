@@ -35,7 +35,8 @@ SHORT_CAPTION_PROMPT = (
     "Focus on the main objects, actions, and scene elements. "
     "Keep the caption concise but informative, similar to how you would describe "
     "the image to someone who cannot see it. "
-    "Be specific about what you see without being overly detailed."
+    "Be specific about what you see without being overly detailed. "
+    "THE CAPTION SHOULD BE A SINGLE SENTENCE, NOT MULTIPLE SENTENCES!!!"
 )
 COCO_INFO = {
     "description": "This is stable 1.0 version of the 2014 MS COCO dataset.",
