@@ -17,7 +17,8 @@ dependencies = [
     "tokenizers==0.21.1",
     "safetensors==0.5.3",
     "triton==2.2.0",
-    # "flash-attn==2.5.7",
+    "bert-score",
+    "flash-attn==2.5.7",
     # ! flash_attn breakes uv. 
     # the setup_environment.sh installs flash_attn after the
     # environment is setup

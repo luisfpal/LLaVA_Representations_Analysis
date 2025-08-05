@@ -643,6 +643,7 @@ def collate_captioning_batch(
         }
 
         tokenized = processor(**processor_kwargs)
+<<<<<<< HEAD
         # todo: improve this, it is not neat
         if return_captions and return_image_ids:
             return tokenized, captions, image_ids
@@ -653,6 +654,18 @@ def collate_captioning_batch(
         elif return_captions:
             return tokenized, captions
         return tokenized
+=======
+        # Build return tuple based on requested data
+        result = [tokenized]
+        if return_captions:
+            result.append(captions)
+        if return_image_ids:
+            result.append(image_ids)
+        if return_images:
+            result.append(images)
+        
+        return tuple(result) if len(result) > 1 else result[0]
+>>>>>>> main
 
     # Raw mode (default)
     return {
@@ -764,6 +777,7 @@ def get_dataloader_for_captioning(
     chat_template_exists: bool = True,
     return_captions: bool = False,
     return_image_ids: bool = False,
+    return_images: bool = False,
 ):
     dataset = ImageCaptioningDataset(
         dataset_path_or_name=dataset_path_or_name,
@@ -777,6 +791,7 @@ def get_dataloader_for_captioning(
         chat_template_exists=chat_template_exists,
         return_captions=return_captions,
         return_image_ids=return_image_ids,
+        return_images=return_images,
     )
 
     return DataLoader(

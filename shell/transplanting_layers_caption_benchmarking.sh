@@ -20,6 +20,12 @@ BATCH_SIZE="10"
 MAX_NEW_TOKENS="20"
 SEED="42"
 
+# --- CLIP Evaluation Parameters ---
+CLIP_MODEL_NAME_OR_PATH="openai/clip-vit-large-patch14-336"
+CLIP_CACHE_DIR="$HOME/scratch/huggingface/hub"
+CLIP_WEIGHT="2.5"
+CLIP_BATCH_SIZE="16"
+
 # --- Output Configuration ---
 SAVE_BASELINE_OUTPUTS="true"  # Set to "false" to disable saving baseline outputs
 
@@ -46,6 +52,12 @@ SCRIPT_ARGS+=(--max_new_tokens "$MAX_NEW_TOKENS")
 SCRIPT_ARGS+=(--results_dir "$RESULTS_DIR")
 SCRIPT_ARGS+=(--dataset_path_or_name "$DATASET_PATH_OR_NAME")
 SCRIPT_ARGS+=(--seed "$SEED")
+
+# Add CLIP evaluation parameters
+SCRIPT_ARGS+=(--clip_model_name_or_path "$CLIP_MODEL_NAME_OR_PATH")
+SCRIPT_ARGS+=(--clip_cache_dir "$CLIP_CACHE_DIR")
+SCRIPT_ARGS+=(--clip_weight "$CLIP_WEIGHT")
+SCRIPT_ARGS+=(--clip_batch_size "$CLIP_BATCH_SIZE")
 
 # Add save_baseline_outputs flag if enabled
 if [ "$SAVE_BASELINE_OUTPUTS" = "true" ]; then
@@ -76,6 +88,10 @@ echo "Model cache directory: $MODEL_CACHE_DIR"
 echo "Batch size: $BATCH_SIZE"
 echo "Max new tokens: $MAX_NEW_TOKENS"
 echo "Seed: $SEED"
+echo "CLIP model: $CLIP_MODEL_NAME_OR_PATH"
+echo "CLIP cache dir: $CLIP_CACHE_DIR"
+echo "CLIP weight: $CLIP_WEIGHT"
+echo "CLIP batch size: $CLIP_BATCH_SIZE"
 echo "Save baseline outputs: $SAVE_BASELINE_OUTPUTS"
 echo "==============================="
 

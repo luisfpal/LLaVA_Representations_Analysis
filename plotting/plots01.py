@@ -11,7 +11,7 @@ from config_results_loader import ResultsLoader
 DEFAULT_MEASURES = ["neighborhood_overlap", "linear_cka"]
 DEFAULT_POOLING_METHODS = ["last", "mean"]
 PROMPT_ENTROPY_POOLING = ["none"]
-PLOTS_DIR = Path(__file__).parent.parent / "plots"
+PLOTS_DIR = Path(__file__).parent.parent / "plots_coco_captioning"
 
 
 def save_plot_if_requested(save_plots: bool, filename: str):
@@ -609,17 +609,31 @@ def template_plot_model_data_measures(
                 )
             )
 
+        data_measures_kwargs = {
+            "datasets": {},
+            "pooling_methods": {},
+        }
+        if "coco_captioning" in datasets and dataset_measure == "intrinsic_dimension":
+            data_measures_kwargs["datasets"]["loc"] = "upper right"
+            data_measures_kwargs["datasets"]["bbox_to_anchor"] = (1, 0.95)
+            data_measures_kwargs["pooling_methods"]["loc"] = "upper right"
+            data_measures_kwargs["pooling_methods"]["bbox_to_anchor"] = (1, 1.0)
+        else:
+            data_measures_kwargs["datasets"]["loc"] = "lower right"
+            data_measures_kwargs["datasets"]["bbox_to_anchor"] = (1, 0.0)
+            data_measures_kwargs["pooling_methods"]["loc"] = "lower right"
+            data_measures_kwargs["pooling_methods"]["bbox_to_anchor"] = (1, 0.05)
+
         # Add dataset legend first
         dataset_legend = first_ax.legend(
             handles=dataset_legend_elements,
-            loc="lower right",
             fontsize=9,
             title_fontsize=10,
             frameon=True,
             fancybox=True,
             shadow=True,
-            bbox_to_anchor=(1, 0.0),
             ncol=len(datasets),
+            **data_measures_kwargs["datasets"],
         )
 
         # Add dataset legend as artist to preserve it when adding second legend
@@ -628,16 +642,15 @@ def template_plot_model_data_measures(
         # Add pooling methods legend second
         first_ax.legend(
             handles=pooling_legend_elements,
-            loc="lower right",
             fontsize=9,
             title_fontsize=10,
             frameon=True,
             fancybox=True,
             shadow=True,
-            bbox_to_anchor=(1, 0.05),
             ncol=len(pooling_methods),
             handlelength=5.0,
             handletextpad=1.0,
+            **data_measures_kwargs["pooling_methods"],
         )
 
     # Set overall title
@@ -941,7 +954,7 @@ def plot_caption_benchmarking_for_directory(
 
     Args:
         results_loader: ResultsLoader instance with loaded data
-        metric_name: Metric to plot ('CIDEr' or 'SPICE')
+        metric_name: Metric to plot ('CIDEr', 'SPICE', 'CLIP-S', 'RefCLIP-S', or 'BERT-S')
         directory_name: Directory name (e.g., 'transplanting_layers_caption_benchmarking')
         save_plots: Whether to save plots instead of showing them
     """
@@ -1127,15 +1140,15 @@ def plot_all_transplanting_layers_caption_benchmarking(
     results_loader: ResultsLoader, save_plots: bool = False
 ):
     """
-    Plot all available caption benchmarking experiments for CIDEr and SPICE metrics.
+    Plot all available caption benchmarking experiments for all metrics.
     """
     print("\n📊 Plotting all transplanting layers caption benchmarking experiments...")
 
     # Print summary of available data
     _print_caption_benchmarking_summary(results_loader)
 
-    # Available metrics
-    metrics = ["CIDEr", "SPICE"]
+    # Available metrics - plot each metric separately
+    metrics = ["CIDEr", "SPICE", "CLIP-S", "RefCLIP-S", "BERT-S"]
 
     # Available directories from config
     caption_directories = results_loader.config.get("caption_benchmarking", {}).get(
@@ -1152,6 +1165,7 @@ def plot_all_transplanting_layers_caption_benchmarking(
 def plot_modalities_similarities(
     results_loader: ResultsLoader,
     stream_types: List[str],
+    similarity_type: str = "cosine_similarity",
     save_plots: bool = False,
 ):
     """
@@ -1160,9 +1174,10 @@ def plot_modalities_similarities(
     Args:
         results_loader: ResultsLoader instance with loaded data
         stream_types: List of stream types to plot (e.g., ['output_layer', 'post_mlp'])
+        similarity_type: Type of similarity to plot ("cosine_similarity" or "homogeneity_score")
         save_plots: Whether to save plots instead of showing them
     """
-    print("\n📊 Plotting modalities similarities...")
+    print(f"\n📊 Plotting modalities similarities: {similarity_type}")
 
     if "modalities_similarities" not in results_loader.data:
         print("⚠️  No modalities similarities data loaded")
@@ -1180,18 +1195,19 @@ def plot_modalities_similarities(
 
     all_datasets = sorted(list(all_datasets))
 
-    # Create 1x2 subplots (shared y-axis)
-    fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
-
-    # Handle single subplot case
+    # Create subplots based on number of datasets
     if len(all_datasets) == 1:
-        axes = [axes]
+        fig, ax = plt.subplots(1, 1, figsize=(6, 8))
+        axes = [ax]
+    else:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
 
     # Define colors for models
     model_colors = {"full": "blue", "pretrained": "red"}
 
-    # Define linestyles for stream types
-    stream_styles = {"output_layer": "-", "post_mlp": "--"}
+    # Define linestyles and markers for stream types (using dashed lines and markers for discrete data)
+    stream_styles = {"output_layer": "--", "post_mlp": ":"}
+    stream_markers = {"output_layer": "o", "post_mlp": "s"}
 
     # Collect all data values for Y limits
     all_data_values = []
@@ -1205,7 +1221,7 @@ def plot_modalities_similarities(
             for stream_type in stream_types:
                 try:
                     similarity_data = results_loader.get_modalities_similarity(
-                        model, dataset, stream_type
+                        model, dataset, stream_type, similarity_type
                     )
 
                     if isinstance(similarity_data, torch.Tensor):
@@ -1214,16 +1230,19 @@ def plot_modalities_similarities(
                     # Collect data for Y limits
                     all_data_values.extend(similarity_data)
 
-                    # Create line plot
+                    # Create line plot with dashed lines and markers for discrete data
                     layers = range(len(similarity_data))
                     color = model_colors.get(model, "gray")
-                    linestyle = stream_styles.get(stream_type, "-")
+                    linestyle = stream_styles.get(stream_type, "--")
+                    marker = stream_markers.get(stream_type, "o")
 
                     ax.plot(
                         layers,
                         similarity_data,
                         color=color,
                         linestyle=linestyle,
+                        marker=marker,
+                        markersize=5,
                         linewidth=2,
                         label=f"{model}_{stream_type}",
                     )
@@ -1236,7 +1255,12 @@ def plot_modalities_similarities(
         ax.set_title(f"{dataset}", fontsize=14, fontweight="bold")
         ax.set_xlabel("Layer", fontsize=12)
         if d_idx == 0:  # Only first subplot gets y-label
-            ax.set_ylabel("Cosine Similarity", fontsize=12)
+            y_label = (
+                "Cosine Similarity"
+                if similarity_type == "cosine_similarity"
+                else "Homogeneity Score"
+            )
+            ax.set_ylabel(y_label, fontsize=12)
         else:
             # Remove Y-axis elements for non-first subplots
             ax.tick_params(left=False)
@@ -1244,14 +1268,21 @@ def plot_modalities_similarities(
 
         ax.grid(True, alpha=0.3)
 
-    # Set Y limits based on collected data
+        # Set Y limits based on collected data
     if all_data_values:
         y_min = min(all_data_values)
         y_max = max(all_data_values)
-        # Add some padding
+
+        # Handle cases where data range is very small or zero
         y_range = y_max - y_min
-        y_min_padded = y_min - 0.05 * y_range
-        y_max_padded = y_max + 0.05 * y_range
+        if y_range < 1e-10:  # Very small or zero range
+            # Set a small range around the single value
+            y_min_padded = y_min - 0.1
+            y_max_padded = y_max + 0.1
+        else:
+            # Add some padding for normal cases
+            y_min_padded = y_min - 0.05 * y_range
+            y_max_padded = y_max + 0.05 * y_range
 
         for ax in axes:
             ax.set_ylim(y_min_padded, y_max_padded)
@@ -1269,31 +1300,47 @@ def plot_modalities_similarities(
                 Line2D([0], [0], color=color, linewidth=3, label=model)
             )
 
-        # Create custom legend for stream types (linestyles)
+        # Create custom legend for stream types (linestyles and markers)
         stream_legend_elements = []
         for stream_type, linestyle in stream_styles.items():
+            marker = stream_markers.get(stream_type, "o")
             stream_legend_elements.append(
                 Line2D(
                     [0],
                     [0],
                     color="black",
                     linestyle=linestyle,
+                    marker=marker,
+                    markersize=8,
                     linewidth=2.5,
                     label=stream_type,
                 )
             )
 
+        similarity_type_kwargs = {"models": {}, "stream_types": {}}
+        if similarity_type == "cosine_similarity":
+            similarity_type_kwargs["models"]["loc"] = "upper left"
+            similarity_type_kwargs["models"]["bbox_to_anchor"] = (0.0, 1)
+            similarity_type_kwargs["stream_types"]["loc"] = "upper left"
+            similarity_type_kwargs["stream_types"]["bbox_to_anchor"] = (0.0, 0.95)
+        elif similarity_type == "homogeneity_score":
+            similarity_type_kwargs["models"]["loc"] = "lower left"
+            similarity_type_kwargs["models"]["bbox_to_anchor"] = (0.0, 0.05)
+            similarity_type_kwargs["stream_types"]["loc"] = "lower left"
+            similarity_type_kwargs["stream_types"]["bbox_to_anchor"] = (0.0, 0.0)
+        else:
+            raise ValueError(f"Invalid similarity type: {similarity_type}")
+
         # Add model legend first
         model_legend = first_ax.legend(
             handles=model_legend_elements,
-            loc="upper left",
             fontsize=9,
             title_fontsize=10,
             frameon=True,
             fancybox=True,
             shadow=True,
-            bbox_to_anchor=(0.0, 1),
             ncol=len(model_colors),
+            **similarity_type_kwargs["models"],
         )
 
         # Add model legend as artist to preserve it when adding second legend
@@ -1302,28 +1349,27 @@ def plot_modalities_similarities(
         # Add stream types legend second
         first_ax.legend(
             handles=stream_legend_elements,
-            loc="upper left",
             fontsize=9,
             title_fontsize=10,
             frameon=True,
             fancybox=True,
             shadow=True,
-            bbox_to_anchor=(0.0, 0.95),
-            ncol=len(stream_styles),
             handlelength=5.0,
             handletextpad=1.0,
+            ncol=len(stream_styles),
+            **similarity_type_kwargs["stream_types"],
         )
 
-    # Set overall title
-    plt.suptitle(
-        "Cosine similarity of trailing text and image embeddings",
-        fontsize=16,
-        fontweight="bold",
-        y=0.98,
+    # Set overall title based on similarity type
+    title = (
+        "Cosine similarity of trailing text and image embeddings"
+        if similarity_type == "cosine_similarity"
+        else "Homogeneity score of trailing text and image embeddings"
     )
+    plt.suptitle(title, fontsize=16, fontweight="bold", y=0.98)
     plt.tight_layout()
 
-    filename = f"modalities_similarities_{'_'.join(stream_types)}.png"
+    filename = f"modalities_similarities_{similarity_type}_{'_'.join(stream_types)}.png"
     save_plot_if_requested(save_plots, filename)
 
 
@@ -1334,31 +1380,41 @@ def main(save_plots: bool = False):
     results.load_all()
     results.print_summary()
 
-    # Create similarities difference dataset using renamed method
-    results.create_similarities_difference_dataset(
-        source_dataset1="cocoqa_txt",
-        source_dataset2="cocoqa_img",
-        target_dataset="cocoqa_txt_minus_cocoqa_img",
-        verbose=False,
-    )
+    # Get the dataset names from the config
+    dataset_names = results.config["datasets"]
 
-    # Compute mean heads projections at layers using renamed method
-    results.compute_mean_heads_projections_at_layers()
+    if ("cocoqa_txt" in dataset_names) and ("cocoqa_img" in dataset_names):
+        # Create similarities difference dataset using renamed method
+        results.create_similarities_difference_dataset(
+            source_dataset1="cocoqa_txt",
+            source_dataset2="cocoqa_img",
+            target_dataset="cocoqa_txt_minus_cocoqa_img",
+            verbose=False,
+        )
 
-    # Create model measures differences for each dataset
-    print("\n🔄 Creating model measures differences...")
+        # Compute mean heads projections at layers using renamed method
+        results.compute_mean_heads_projections_at_layers()
 
-    # Create model measures differences using renamed method
-    results.create_dataset_measures_models_difference(
-        dataset_name="cocoqa_txt",
-        model1="pretrained",
-        model2="full",
-    )
-    results.create_dataset_measures_models_difference(
-        dataset_name="cocoqa_img",
-        model1="pretrained",
-        model2="full",
-    )
+        # Create model measures differences for each dataset
+        print("\n🔄 Creating model measures differences...")
+
+        # Create model measures differences using renamed method
+        results.create_dataset_measures_models_difference(
+            dataset_name="cocoqa_txt",
+            model1="pretrained",
+            model2="full",
+        )
+        results.create_dataset_measures_models_difference(
+            dataset_name="cocoqa_img",
+            model1="pretrained",
+            model2="full",
+        )
+    elif "coco_captioning" in dataset_names:
+        results.create_dataset_measures_models_difference(
+            dataset_name="coco_captioning",
+            model1="pretrained",
+            model2="full",
+        )
 
     results.print_summary()
 
@@ -1369,11 +1425,21 @@ def main(save_plots: bool = False):
     # plot_all_output_layer_similarity_measures(results, save_plots=save_plots)
     # plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
     # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
-    # plot_all_model_data_measures(results, save_plots=save_plots)
+    plot_all_model_data_measures(results, save_plots=save_plots)
     # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
-    plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
-    # todo: change plot_modalities_similarities from lines to scatter
-    # plot_modalities_similarities(results, ["output_layer", "post_mlp"], save_plots=save_plots)
+    # plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
+    # plot_modalities_similarities(
+    #     results,
+    #     ["output_layer", "post_mlp"],
+    #     "cosine_similarity",
+    #     save_plots=save_plots,
+    # )
+    # plot_modalities_similarities(
+    #     results,
+    #     ["output_layer", "post_mlp"],
+    #     "homogeneity_score",
+    #     save_plots=save_plots,
+    # )
 
 
 if __name__ == "__main__":

@@ -5,8 +5,9 @@
 DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
 # Analysis configuration
-RESIDUAL_STREAM_TYPES="post_mlp"
-TOKENS_POOLING_METHODS="none"
+DATASET_TYPE="coco_captioning"
+RESIDUAL_STREAM_TYPES="output_layer,post_mlp"
+TOKENS_POOLING_METHODS="last,mean"
 SIMILARITY_MEASURES="neighborhood_overlap,linear_cka,svcca"
 
 # Similarity measure parameters
@@ -23,7 +24,7 @@ SEED="42"
 
 # Directory configuration
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
-RESULTS_DIR="$PROJECT_DIR/results"
+RESULTS_DIR="$PROJECT_DIR/results_coco_captioning"
 MODEL_CACHE_DIR="$HOME/scratch/huggingface/hub"
 
 # Script configuration
@@ -36,6 +37,7 @@ SCRIPT_ARGS+=(--results-dir "$RESULTS_DIR")
 SCRIPT_ARGS+=(--dataset-path-or-name "$DATASET_PATH_OR_NAME")
 SCRIPT_ARGS+=(--model-cache-dir "$MODEL_CACHE_DIR")
 SCRIPT_ARGS+=(--batch-size "$BATCH_SIZE")
+SCRIPT_ARGS+=(--dataset-type "$DATASET_TYPE")
 SCRIPT_ARGS+=(--residual-stream-types "$RESIDUAL_STREAM_TYPES")
 SCRIPT_ARGS+=(--tokens-pooling-methods "$TOKENS_POOLING_METHODS")
 SCRIPT_ARGS+=(--similarity-measures "$SIMILARITY_MEASURES")
@@ -60,6 +62,7 @@ echo "====== Residual Stream Analysis Configuration ======"
 echo "Dataset: $DATASET_PATH_OR_NAME"
 echo "Results directory: $RESULTS_DIR"
 echo "Model cache directory: $MODEL_CACHE_DIR"
+echo "Dataset type: $DATASET_TYPE"
 echo "Residual stream types: $RESIDUAL_STREAM_TYPES"
 echo "Token pooling methods: $TOKENS_POOLING_METHODS"
 echo "Similarity measures: $SIMILARITY_MEASURES"

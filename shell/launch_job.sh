@@ -6,8 +6,9 @@ PARTITION="DGX"
 GPUS=1
 CPUS=48
 MEM="100GB"
-TIME="03:10:00"
+TIME="06:00:00"
 
+# TIME="03:10:00"
 # MEM="100GB"
 # MEM="564GB"
 # TIME="06:00:00"
@@ -16,7 +17,7 @@ PROJECT_ROOT="$HOME/multimodal_finetuned_representations"
 LOG_DIR="$PROJECT_ROOT/.experiments_logs"
 mkdir -p "$LOG_DIR"
 
-SCRIPT="transplanting_layers_caption_benchmarking.sh"
+SCRIPT="residual_stream_trace_and_measures_evaluation.sh"
 
 # ====================== SBATCH Script Creation ====================== #
 SBATCH_SCRIPT=$(mktemp /tmp/sbatch_experiment.XXXXXX.sh)

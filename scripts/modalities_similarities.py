@@ -13,6 +13,7 @@ from utils import (
     seed_all,
     ModelType,
     compute_layers_cosine_similarity,
+    compute_layers_homogeneity_score,
 )
 
 # Use float16 for relatively light weight memory usage and fast extraction
@@ -119,7 +120,7 @@ def get_embeddings_sampling_args(model: ModelType) -> dict:
 
 def main():
     """
-    Extract residual streams from multimodal models and computes cosine similarity
+    Extract residual streams from multimodal models and compute modalities similarities
     between text and image modalities in the residual stream.
 
     Results are organized in the following directory structure:
@@ -127,14 +128,16 @@ def main():
     ├── dataset_name/
     │   ├── model_name/
     │   │   ├── modalities_similarity/
-    │   │   │   └── <stream_type>_sample.safetensors
-
+    │   │   │   └── <stream_type>_sample_cosine_similarity.safetensors
+    │   │   │   └── <stream_type>_sample_homogeneity_score.safetensors
+    
     ! Comment: 🤦‍♂️ a better structure would have been:
     results/
     ├── modalities_similarities/
     │   ├── model_name/
     │   │   ├── dataset_name/
-    │   │   │   └── <stream_type>_sample.safetensors
+    │   │   │   └── <stream_type>_sample_cosine_similarity.safetensors
+    │   │   │   └── <stream_type>_sample_homogeneity_score.safetensors
     ! ✅ I corrected this in the code for plotting purposes
 
     Command-line arguments allow selection of specific residual stream types to control which analyses are performed.
@@ -157,6 +160,10 @@ def main():
         f"Valid options: {', '.join(sorted(DATASETS_TYPES.keys()))}. "
         f"If not specified, the default dataset type will be processed.",
     )
+    parser.add_argument("--maxk", type=int, default=128)
+    parser.add_argument("--range-max", type=int, default=128)
+    parser.add_argument("--k", type=int, default=16)
+    parser.add_argument("--Z", type=float, default=1.65)
 
     # Analysis configuration
     parser.add_argument(
@@ -263,9 +270,13 @@ def main():
 
                 for chat_template_exists in [True, False]:
                     if chat_template_exists:
-                        print("\n*****🔤 Residual stream with random text positions*****")
+                        print(
+                            "\n*****🔤 Residual stream with random text positions*****"
+                        )
                     else:
-                        print("\n*****🖼️ Residual stream with random image positions*****")
+                        print(
+                            "\n*****🖼️ Residual stream with random image positions*****"
+                        )
 
                     dataloader_kwargs["chat_template_exists"] = chat_template_exists
                     processed_dataloader = get_dataloader_func(
@@ -305,7 +316,7 @@ def main():
                     torch.cuda.empty_cache()
 
                 print(
-                    "Computing cosine similarity between text and image embeddings in the residual stream..."
+                    "Computing cosine similarity and homogeneity score between text and image embeddings in the residual stream..."
                 )
                 layers_cosine_similarity = compute_layers_cosine_similarity(
                     residual_stream_text_embeddings,
@@ -315,10 +326,24 @@ def main():
                     {"layers_cosine_similarity": layers_cosine_similarity},
                     os.path.join(
                         modalities_similarity_dir,
-                        f"{residual_stream_type}_sample.safetensors",
+                        f"{residual_stream_type}_sample_cosine_similarity.safetensors",
                     ),
                 )
-
+                layers_homogeneity_scores = compute_layers_homogeneity_score(
+                    residual_stream_text_embeddings,
+                    residual_stream_image_embeddings,
+                    maxk=args.maxk,
+                    range_max=args.range_max,
+                    k=args.k,
+                    Z=args.Z,
+                )
+                save_file(
+                    {"layers_homogeneity_scores": layers_homogeneity_scores},
+                    os.path.join(
+                        modalities_similarity_dir,
+                        f"{residual_stream_type}_sample_homogeneity_score.safetensors",
+                    ),
+                )
                 # Clean up model from memory
                 del (
                     model,
@@ -326,6 +351,7 @@ def main():
                     residual_stream_text_embeddings,
                     residual_stream_image_embeddings,
                     layers_cosine_similarity,
+                    layers_homogeneity_scores,
                 )
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -352,4 +378,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() 
