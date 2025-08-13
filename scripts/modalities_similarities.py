@@ -35,6 +35,7 @@ DATASETS_TYPES = {
     },
     "coco_captioning": {
         "downsample_size": 2500,
+        "concatenate_captions": True,
     },
 }
 
@@ -129,7 +130,7 @@ def main():
     │   ├── model_name/
     │   │   ├── modalities_similarity/
     │   │   │   └── <stream_type>_sample_cosine_similarity.safetensors
-    │   │   │   └── <stream_type>_sample_homogeneity_score.safetensors
+    │   │   │   └── <stream_type>_sample_homogeneity_score_<metric>.safetensors
 
     ! Comment: 🤦‍♂️ a better structure would have been:
     results/
@@ -137,7 +138,7 @@ def main():
     │   ├── model_name/
     │   │   ├── dataset_name/
     │   │   │   └── <stream_type>_sample_cosine_similarity.safetensors
-    │   │   │   └── <stream_type>_sample_homogeneity_score.safetensors
+    │   │   │   └── <stream_type>_sample_homogeneity_score_<metric>.safetensors
     ! ✅ I corrected this in the code for plotting purposes
 
     Command-line arguments allow selection of specific residual stream types to control which analyses are performed.
@@ -329,21 +330,23 @@ def main():
                         f"{residual_stream_type}_sample_cosine_similarity.safetensors",
                     ),
                 )
-                layers_homogeneity_scores = compute_layers_homogeneity_score(
-                    residual_stream_text_embeddings,
-                    residual_stream_image_embeddings,
-                    maxk=args.maxk,
-                    range_max=args.range_max,
-                    k=args.k,
-                    Z=args.Z,
-                )
-                save_file(
-                    {"layers_homogeneity_scores": layers_homogeneity_scores},
-                    os.path.join(
-                        modalities_similarity_dir,
-                        f"{residual_stream_type}_sample_homogeneity_score.safetensors",
-                    ),
-                )
+                for metric in ["euclidean", "cosine"]:
+                    layers_homogeneity_scores = compute_layers_homogeneity_score(
+                        residual_stream_text_embeddings,
+                        residual_stream_image_embeddings,
+                        maxk=args.maxk,
+                        range_max=args.range_max,
+                        k=args.k,
+                        Z=args.Z,
+                        metric=metric,
+                    )
+                    save_file(
+                        {"layers_homogeneity_scores": layers_homogeneity_scores},
+                        os.path.join(
+                            modalities_similarity_dir,
+                            f"{residual_stream_type}_sample_homogeneity_score_{metric}.safetensors",
+                        ),
+                    )
                 # Clean up model from memory
                 del (
                     model,
@@ -351,7 +354,6 @@ def main():
                     residual_stream_text_embeddings,
                     residual_stream_image_embeddings,
                     layers_cosine_similarity,
-                    layers_homogeneity_scores,
                 )
                 gc.collect()
                 torch.cuda.empty_cache()

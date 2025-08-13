@@ -17,7 +17,7 @@ WINDOW_SIZE="2"
 
 # --- Benchmarking Parameters ---
 BATCH_SIZE="10"
-MAX_NEW_TOKENS="20"
+MAX_NEW_TOKENS="100"
 SEED="42"
 
 # --- CLIP Evaluation Parameters ---

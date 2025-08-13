@@ -6,11 +6,10 @@ DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
 # Analysis configuration
 RESIDUAL_STREAM_TYPES="output_layer,post_mlp"
-DATASET_TYPE="coco_captioning,cocoqa_img"
-# DATASET_TYPE="coco_captioning"
+DATASET_TYPE="coco_captioning"
 
 # Processing parameters
-BATCH_SIZE="25"
+BATCH_SIZE="16"
 SEED="42"
 
 # Homogeneity score parameters
