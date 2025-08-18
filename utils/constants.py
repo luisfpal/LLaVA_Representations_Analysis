@@ -38,6 +38,7 @@ SHORT_CAPTION_PROMPT = (
     "Be specific about what you see without being overly detailed. "
     "THE CAPTION SHOULD BE A SINGLE SENTENCE, NOT MULTIPLE SENTENCES!!!"
 )
+# COCO dataset info that at some point were useful to make the pycocoevalcap work
 COCO_INFO = {
     "description": "This is stable 1.0 version of the 2014 MS COCO dataset.",
     "url": "http://mscoco.org",

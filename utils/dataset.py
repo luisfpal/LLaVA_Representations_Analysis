@@ -660,7 +660,7 @@ def collate_captioning_batch(
             result.append(image_ids)
         if return_images:
             result.append(images)
-        
+
         return tuple(result) if len(result) > 1 else result[0]
 
     # Raw mode (default)

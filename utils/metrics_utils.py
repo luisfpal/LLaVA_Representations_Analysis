@@ -1041,18 +1041,18 @@ def compute_layers_homogeneity_score(
             # Compute intrinsic dimension
             data_dadapy = Data(distances=distances, maxk=maxk)
             id_list, _, _ = data_dadapy.return_id_scaling_gride(range_max=range_max)
-            id_index = int(math.log2(k)) - 1
+            id_index = int(math.log2(k))
             data_dadapy.set_id(id_list[id_index])
             data_dadapy.compute_density_kNN(k=k)
             clusters_AdvancedDensityPeak = data_dadapy.compute_clustering_ADP(Z=Z)
 
-            # Create labels for the clustering
-            labels = np.zeros(num_samples * 2)
-            labels[:num_samples] = 1.0
+            # Create ground truth labels for the clustering
+            ground_truth_labels = np.zeros(num_samples * 2)
+            ground_truth_labels[:num_samples] = 1.0
 
             # Compute homogeneity score
             homogeneity_score, _, _ = homogeneity_completeness_v_measure(
-                labels,
+                ground_truth_labels,
                 clusters_AdvancedDensityPeak,
             )
             homogeneity_scores[layer] = homogeneity_score
