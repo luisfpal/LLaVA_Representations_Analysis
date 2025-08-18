@@ -12,9 +12,9 @@ from utils.operations_utils import seed_all
 TRANSPLANTATION_WEIGHTS_METHODS = {}
 
 
-# Remove the hardcoded benchmark_model function - it should be passed as a parameter
-
-
+# todo:
+# if used in the future add support to pass list of layers to transplant
+# for more flexible experimentation
 def get_transplantation_layers(method: str, num_layers: int, stride: int) -> List[int]:
     """Get the list of layers to process for transplantation."""
     base_layers = [i * stride for i in range(num_layers // stride + 1)]
@@ -23,6 +23,9 @@ def get_transplantation_layers(method: str, num_layers: int, stride: int) -> Lis
     return base_layers[:-1]
 
 
+# todo:
+# add the layers_list method for the case of passing a list of layers to transplant
+# for more flexible experimentation
 def get_transplantation_params(
     method: str, layer_value: int, method_args: Dict
 ) -> Dict:
@@ -56,7 +59,7 @@ def run_transplantation_experiments(
     print(f"Running {method} transplantation... 🔄")
     print(f"Number of layers transplantations: {len(layers)}")
     print(f"{'+-' * 40}\n")
-    
+
     for idx, layer_value in enumerate(layers):
         progress = (idx + 1) / len(layers)
         print(
@@ -92,12 +95,14 @@ def run_transplantation_experiments(
     return benchmarking_results
 
 
-def get_output_filename(model_identifiers_list: List[str], method: str, method_args: Dict) -> str:
+def get_output_filename(
+    model_identifiers_list: List[str], method: str, method_args: Dict
+) -> str:
     """Generate output filename based on transplantation method."""
     stride = method_args["stride"]
     # Create a descriptive model identifier for the filename
     combined_model_id = "_".join(model_identifiers_list)
-    
+
     if method == "sliding_window":
         window_size = method_args["window_size"]
         return f"{combined_model_id}_sliding_window_ws{window_size}_s{stride}.csv"
@@ -111,8 +116,8 @@ def setup_models(args) -> Tuple[object, object, object]:
         multimodal_model_name_or_path=args.multimodal_model_name_or_path,
         model_cache_dir=args.model_cache_dir,
         device_map="cpu",
-        attn_implementation="sdpa",
-        model_dtype=torch.float32,
+        attn_implementation="flash_attention_2",
+        model_dtype=torch.float16,
     )
 
     multimodal_model_pretrained_connector = setup_multimodal_model(
@@ -124,8 +129,8 @@ def setup_models(args) -> Tuple[object, object, object]:
         language_model_name_or_path=args.language_model_name_or_path,
         skip_processor=True,
         device_map="cpu",
-        attn_implementation="sdpa",
-        model_dtype=torch.float32,
+        attn_implementation="flash_attention_2",
+        model_dtype=torch.float16,
     )
 
     return multimodal_model, multimodal_model_pretrained_connector, processor
@@ -144,52 +149,65 @@ def benchmark_baseline_models(
 ) -> Tuple[Dict[str, float], Dict[str, float]]:
     """Benchmark both baseline models and return their results."""
     print("\nBenchmarking baseline multimodal model... 📊")
-    
+
     # Prepare save path for baseline multimodal model outputs
     baseline_model_save_path = None
     if save_baseline_outputs:
         multimodal_model_id = model_identifiers_list[0]  # Multimodal model identifier
-        baseline_model_save_path = os.path.join(results_dir, f"{multimodal_model_id}_outputs.json")
+        baseline_model_save_path = os.path.join(
+            results_dir, f"{multimodal_model_id}_outputs.json"
+        )
         # Skip if file already exists
         if os.path.exists(baseline_model_save_path):
-            print(f"Skipping baseline model outputs save - file already exists: {baseline_model_save_path}")
+            print(
+                f"Skipping baseline model outputs save - file already exists: {baseline_model_save_path}"
+            )
             baseline_model_save_path = None
-    
+
     baseline_model_results = benchmark_func(
         multimodal_model,
         processed_dataloader,
         processor,
         max_new_tokens,
-        dtype=torch.float32,
+        dtype=torch.float16,
         save_outputs_path=baseline_model_save_path,
     )
 
     print("\nBenchmarking multimodal model with pretrained connector... 📊")
-    
+
     # Prepare save path for pretrained connector model outputs
     pretrained_connector_save_path = None
     if save_baseline_outputs:
-        pretrained_connector_model_id = model_identifiers_list[1]  # Pretrained connector model identifier
-        pretrained_connector_save_path = os.path.join(results_dir, f"{pretrained_connector_model_id}_outputs.json")
+        pretrained_connector_model_id = model_identifiers_list[
+            1
+        ]  # Pretrained connector model identifier
+        pretrained_connector_save_path = os.path.join(
+            results_dir, f"{pretrained_connector_model_id}_outputs.json"
+        )
         # Skip if file already exists
         if os.path.exists(pretrained_connector_save_path):
-            print(f"Skipping pretrained connector outputs save - file already exists: {pretrained_connector_save_path}")
+            print(
+                f"Skipping pretrained connector outputs save - file already exists: {pretrained_connector_save_path}"
+            )
             pretrained_connector_save_path = None
-    
+
     pretrained_connector_results = benchmark_func(
         multimodal_model_pretrained_connector,
         processed_dataloader,
         processor,
         max_new_tokens,
-        dtype=torch.float32,
+        dtype=torch.float16,
         save_outputs_path=pretrained_connector_save_path,
     )
 
     return baseline_model_results, pretrained_connector_results
 
 
-def create_benchmark_model_wrapper(benchmark_func: Callable, args: argparse.Namespace) -> Callable:
+def create_benchmark_model_wrapper(
+    benchmark_func: Callable, args: argparse.Namespace
+) -> Callable:
     """Create a wrapper for the benchmark function with GPU device management."""
+
     def benchmark_model(
         model,
         processed_dataloader,
@@ -206,22 +224,28 @@ def create_benchmark_model_wrapper(benchmark_func: Callable, args: argparse.Name
             "processor": processor,
             "max_new_tokens": max_new_tokens,
         }
-        
+
         # Add CLIP parameters for captioning tasks
         if "captioning" in benchmark_func.__name__:
             benchmark_func_kwargs["save_captions_path"] = save_outputs_path
-            benchmark_func_kwargs["clip_model_name_or_path"] = getattr(args, 'clip_model_name_or_path', "openai/clip-vit-large-patch14-336")
-            benchmark_func_kwargs["clip_cache_dir"] = getattr(args, 'clip_cache_dir', "~/scratch/huggingface/hub")
-            benchmark_func_kwargs["clip_weight"] = getattr(args, 'clip_weight', 2.5)
-            benchmark_func_kwargs["clip_batch_size"] = getattr(args, 'clip_batch_size', 16)
+            benchmark_func_kwargs["clip_model_name_or_path"] = getattr(
+                args, "clip_model_name_or_path", "openai/clip-vit-large-patch14-336"
+            )
+            benchmark_func_kwargs["clip_cache_dir"] = getattr(
+                args, "clip_cache_dir", "~/scratch/huggingface/hub"
+            )
+            benchmark_func_kwargs["clip_weight"] = getattr(args, "clip_weight", 2.5)
+            benchmark_func_kwargs["clip_batch_size"] = getattr(
+                args, "clip_batch_size", 16
+            )
         elif "vqa" in benchmark_func.__name__:
             benchmark_func_kwargs["save_answers_path"] = save_outputs_path
-            
+
         results = benchmark_func(**benchmark_func_kwargs)
 
         model.to("cpu")
         return results
-    
+
     return benchmark_model
 
 
@@ -234,7 +258,7 @@ def run_transplantation_benchmarking(
 ) -> None:
     """
     Run transplantation benchmarking experiments.
-    
+
     Args:
         args: Command line arguments
         dataset_config: Configuration for the dataset
@@ -245,13 +269,18 @@ def run_transplantation_benchmarking(
     seed_all(args.seed)
 
     # Setup models
-    multimodal_model, multimodal_model_pretrained_connector, processor = setup_models(args)
+    multimodal_model, multimodal_model_pretrained_connector, processor = setup_models(
+        args
+    )
     model_num_layers = multimodal_model.language_model.config.num_hidden_layers
-    
+
     # Create descriptive model identifiers for file naming
-    multimodal_model_id = args.multimodal_model_name_or_path.split('/')[-1]
-    language_model_id = args.language_model_name_or_path.split('/')[-1]
-    model_identifiers_list = [multimodal_model_id, f"{multimodal_model_id}_{language_model_id}_pretrained_connector"]
+    multimodal_model_id = args.multimodal_model_name_or_path.split("/")[-1]
+    language_model_id = args.language_model_name_or_path.split("/")[-1]
+    model_identifiers_list = [
+        multimodal_model_id,
+        f"{multimodal_model_id}_{language_model_id}_pretrained_connector",
+    ]
 
     # Setup output directories
     results_dir = os.path.expanduser(args.results_dir)
@@ -275,23 +304,25 @@ def run_transplantation_benchmarking(
             "batch_size": args.batch_size,
             "seed": args.seed,
         }
-        
+
         processed_dataloader = get_dataloader_func(**dataloader_kwargs)
 
         dataset_dir = os.path.join(benchmarking_results_dir, dataset_name)
         os.makedirs(dataset_dir, exist_ok=True)
 
         # Benchmark baseline models
-        baseline_model_results, pretrained_connector_results = benchmark_baseline_models(
-            multimodal_model,
-            multimodal_model_pretrained_connector,
-            processed_dataloader,
-            processor,
-            args.max_new_tokens,
-            benchmark_model,
-            dataset_dir,
-            model_identifiers_list,
-            getattr(args, 'save_baseline_outputs', False),
+        baseline_model_results, pretrained_connector_results = (
+            benchmark_baseline_models(
+                multimodal_model,
+                multimodal_model_pretrained_connector,
+                processed_dataloader,
+                processor,
+                args.max_new_tokens,
+                benchmark_model,
+                dataset_dir,
+                model_identifiers_list,
+                getattr(args, "save_baseline_outputs", False),
+            )
         )
 
         # Run transplantation experiments
@@ -319,14 +350,18 @@ def run_transplantation_benchmarking(
 
         # Combine all results and save
         all_results = transplantation_results.copy()
-        all_results.update({
-            "mm_model": baseline_model_results,
-            "mm_pretrained_connector": pretrained_connector_results,
-        })
+        all_results.update(
+            {
+                "mm_model": baseline_model_results,
+                "mm_pretrained_connector": pretrained_connector_results,
+            }
+        )
 
         # Save results to CSV
         output_filename = get_output_filename(
-            model_identifiers_list, args.transplantation_method, transplantation_method_config
+            model_identifiers_list,
+            args.transplantation_method,
+            transplantation_method_config,
         )
         results_df = pd.DataFrame.from_dict(all_results, orient="index")
         output_path = os.path.join(dataset_dir, output_filename)
@@ -348,37 +383,56 @@ def create_common_parser() -> argparse.ArgumentParser:
         required=True,
         choices=["sliding_window", "two_parts"],
     )
-    parser.add_argument("--stride", type=int, default=2, 
-                       help="Stride value for transplantation methods")
-    parser.add_argument("--window_size", type=int, default=2,
-                       help="Window size for sliding_window method (ignored for two_parts)")
+    parser.add_argument(
+        "--stride", type=int, default=2, help="Stride value for transplantation methods"
+    )
+    parser.add_argument(
+        "--window_size",
+        type=int,
+        default=2,
+        help="Window size for sliding_window method (ignored for two_parts)",
+    )
     parser.add_argument("--batch_size", type=int, default=25)
     parser.add_argument("--max_new_tokens", type=int, default=10)
     parser.add_argument("--results_dir", type=str, required=True)
     parser.add_argument("--dataset_path_or_name", type=str, required=True)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--save_baseline_outputs", action="store_true",
-                       help="Save baseline model outputs (captions/answers) to JSON files")
-    
+    parser.add_argument(
+        "--save_baseline_outputs",
+        action="store_true",
+        help="Save baseline model outputs (captions/answers) to JSON files",
+    )
+
     # CLIP evaluation parameters
-    parser.add_argument("--clip_model_name_or_path", type=str, 
-                       default="openai/clip-vit-large-patch14-336",
-                       help="CLIP model name or path for evaluation")
-    parser.add_argument("--clip_cache_dir", type=str, 
-                       default="~/scratch/huggingface/hub",
-                       help="Cache directory for CLIP model")
-    parser.add_argument("--clip_weight", type=float, default=2.5,
-                       help="Weight for CLIP score computation")
-    parser.add_argument("--clip_batch_size", type=int, default=16,
-                       help="Batch size for CLIP evaluation")
-    
+    parser.add_argument(
+        "--clip_model_name_or_path",
+        type=str,
+        default="openai/clip-vit-large-patch14-336",
+        help="CLIP model name or path for evaluation",
+    )
+    parser.add_argument(
+        "--clip_cache_dir",
+        type=str,
+        default="~/scratch/huggingface/hub",
+        help="Cache directory for CLIP model",
+    )
+    parser.add_argument(
+        "--clip_weight",
+        type=float,
+        default=2.5,
+        help="Weight for CLIP score computation",
+    )
+    parser.add_argument(
+        "--clip_batch_size", type=int, default=16, help="Batch size for CLIP evaluation"
+    )
+
     return parser
 
 
 def setup_transplantation_methods(args: argparse.Namespace) -> None:
     """Setup transplantation methods configuration based on command line arguments."""
     global TRANSPLANTATION_WEIGHTS_METHODS
-    
+
     TRANSPLANTATION_WEIGHTS_METHODS = {
         "sliding_window": {
             "stride": args.stride,
@@ -387,4 +441,4 @@ def setup_transplantation_methods(args: argparse.Namespace) -> None:
         "two_parts": {
             "stride": args.stride,
         },
-    } 
+    }

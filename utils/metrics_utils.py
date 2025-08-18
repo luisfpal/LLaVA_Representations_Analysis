@@ -984,6 +984,7 @@ def compute_layers_cosine_similarity(
 def compute_layers_homogeneity_score(
     X_tensor: torch.Tensor,
     Y_tensor: torch.Tensor,
+    metric: str = "euclidean",
     maxk: int = 128,
     range_max: int = 128,
     k: int = 16,
@@ -999,6 +1000,10 @@ def compute_layers_homogeneity_score(
     Returns:
         Tensor of shape (layers,) containing homogeneity score for each layer
     """
+    # Safety check
+    if metric not in ["euclidean", "cosine"]:
+        raise ValueError(f"Invalid metric: {metric}")
+
     # Validate input shapes
     if X_tensor.shape != Y_tensor.shape:
         raise ValueError(
@@ -1028,26 +1033,28 @@ def compute_layers_homogeneity_score(
             layer_data = _ensure_device(layer_data)
             layer_data = layer_data.to(torch.float64)
 
-            # Compute euclidean distances
+            # Compute distance matrix
+            if metric == "cosine":
+                layer_data = F.normalize(layer_data, dim=1)
             distances = torch.cdist(layer_data, layer_data, p=2).cpu().numpy()
 
             # Compute intrinsic dimension
             data_dadapy = Data(distances=distances, maxk=maxk)
             id_list, _, _ = data_dadapy.return_id_scaling_gride(range_max=range_max)
-            id_index = int(math.log2(k)) - 1
+            id_index = int(math.log2(k))
             data_dadapy.set_id(id_list[id_index])
             data_dadapy.compute_density_kNN(k=k)
             clusters_AdvancedDensityPeak = data_dadapy.compute_clustering_ADP(Z=Z)
 
-            # Create labels for the clustering
-            labels = np.zeros(num_samples * 2)
-            labels[:num_samples] = 1.0
+            # Create ground truth labels for the clustering
+            ground_truth_labels = np.zeros(num_samples * 2)
+            ground_truth_labels[:num_samples] = 1.0
 
             # Compute homogeneity score
-            log_homogeneity_score = homogeneity_completeness_v_measure(
-                labels,
+            homogeneity_score, _, _ = homogeneity_completeness_v_measure(
+                ground_truth_labels,
                 clusters_AdvancedDensityPeak,
             )
-            homogeneity_scores[layer] = log_homogeneity_score[0]
+            homogeneity_scores[layer] = homogeneity_score
 
     return homogeneity_scores

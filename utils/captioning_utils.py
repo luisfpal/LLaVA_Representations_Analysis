@@ -1,35 +1,19 @@
-import os
-
-os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64"
-os.environ["PATH"] = (
-    f"/usr/lib/jvm/java-8-openjdk-amd64/bin:{os.environ.get('PATH', '')}"
-)
-
 import torch
-import contextlib
 import json
-from pycocotools.coco import COCO
-from pycocoevalcap.eval import COCOEvalCap
-import tempfile
+from .cider import Cider
 from typing import Dict, Optional, List, Tuple
 import gc
 from torch.utils.data import DataLoader, TensorDataset
 from transformers.feature_extraction_utils import BatchFeature
 from tqdm import tqdm
-from bert_score import score
-import logging
-import transformers
+
+# from bert_score import score
 from PIL import Image
 from .model_utils import (
     ModelType,
     ProcessorType,
     load_hf_model_and_processor_or_tokenizer,
 )
-
-# Suppress warnings from transformers for using the bert-score library
-transformers.tokenization_utils.logger.setLevel(logging.ERROR)
-transformers.configuration_utils.logger.setLevel(logging.ERROR)
-transformers.modeling_utils.logger.setLevel(logging.ERROR)
 
 
 def generate_captions(
@@ -74,20 +58,20 @@ def save_captions_to_file(captions_data: List[Dict], file_path: str) -> None:
         print(f"Warning: Failed to save captions to {file_path}: {e}")
 
 
-def compute_bert_scores(generated_captions, list_of_reference_lists):
-    """
-    generated_captions: list of generated strings
-    list_of_reference_lists: list of list of reference captions
-                             e.g. [[ref1a, ref1b], [ref2a, ref2b], ...]
-    """
-    P, R, F1 = score(
-        cands=generated_captions,
-        refs=list_of_reference_lists,
-        lang="en",
-        verbose=False,
-    )
-    mean_F1 = F1.mean().item()
-    return mean_F1
+# def compute_bert_scores(generated_captions, list_of_reference_lists):
+#     """
+#     generated_captions: list of generated strings
+#     list_of_reference_lists: list of list of reference captions
+#                              e.g. [[ref1a, ref1b], [ref2a, ref2b], ...]
+#     """
+#     P, R, F1 = score(
+#         cands=generated_captions,
+#         refs=list_of_reference_lists,
+#         lang="en",
+#         verbose=False,
+#     )
+#     mean_F1 = F1.mean().item()
+#     return mean_F1
 
 
 def _get_generated_captions_from_list_of_dicts(list_of_dicts: List[Dict]) -> List[str]:
@@ -402,6 +386,61 @@ def compute_ref_clip_score(
     return torch.mean(all_scores).item()
 
 
+def compute_pycoco_scores(
+    ground_truth_images_ids_pycoco,
+    ground_truth_annotations_pycoco,
+    generated_captions_pycoco,
+):
+    import os
+
+    os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64"
+    os.environ["PATH"] = (
+        f"/usr/lib/jvm/java-8-openjdk-amd64/bin:{os.environ.get('PATH', '')}"
+    )
+
+    import tempfile
+    import contextlib
+    from pycocoevalcap.eval import COCOEvalCap
+    from pycocotools.coco import COCO
+
+    # Prepare COCO evaluation data
+    ground_truth_coco_format = {
+        "info": {},
+        "licenses": [],
+        "type": "captions",
+        "images": ground_truth_images_ids_pycoco,
+        "annotations": ground_truth_annotations_pycoco,
+    }
+
+    # Create temporary files for COCO evaluation
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as f_gt:
+        json.dump(ground_truth_coco_format, f_gt)
+        ground_truth_path = f_gt.name
+
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as f_res:
+        json.dump(generated_captions_pycoco, f_res)
+        results_path = f_res.name
+
+    # Evaluate captions using COCO metrics
+    with open(os.devnull, "w") as fnull, contextlib.redirect_stdout(fnull):
+        coco = COCO(ground_truth_path)
+        coco_result = coco.loadRes(results_path)
+        coco_eval = COCOEvalCap(coco, coco_result)
+        coco_eval.params["image_id"] = coco_result.getImgIds()
+        coco_eval.evaluate()
+
+    return {
+        "BLEU-1": coco_eval.eval["Bleu_1"],
+        "BLEU-2": coco_eval.eval["Bleu_2"],
+        "BLEU-3": coco_eval.eval["Bleu_3"],
+        "BLEU-4": coco_eval.eval["Bleu_4"],
+        "METEOR": coco_eval.eval["METEOR"],
+        "ROUGE-L": coco_eval.eval["ROUGE_L"],
+        "CIDEr": coco_eval.eval["CIDEr"],
+        "SPICE": coco_eval.eval["SPICE"],
+    }
+
+
 def benchmark_model_captioning_processed_dataloader(
     model: ModelType,
     processor: ProcessorType,
@@ -428,8 +467,8 @@ def benchmark_model_captioning_processed_dataloader(
         clip_batch_size: Batch size for CLIP evaluation
 
     Returns:
-        Dictionary containing evaluation metrics including BLEU, METEOR, ROUGE-L,
-        CIDEr, SPICE, CLIP-S, RefCLIP-S, and BERT-S scores
+        Dictionary containing evaluation metrics including
+        CIDEr, CLIP-S, RefCLIP-S scores
     """
 
     print("\n+-+-+-🔤 Captioning dataset+-+-+-+\n")
@@ -505,24 +544,6 @@ def benchmark_model_captioning_processed_dataloader(
     if save_captions_path:
         save_captions_to_file(generated_captions_pycoco, save_captions_path)
 
-    # Prepare COCO evaluation data
-    ground_truth_coco_format = {
-        "info": {},
-        "licenses": [],
-        "type": "captions",
-        "images": ground_truth_images_ids_pycoco,
-        "annotations": ground_truth_annotations_pycoco,
-    }
-
-    # Create temporary files for COCO evaluation
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as f_gt:
-        json.dump(ground_truth_coco_format, f_gt)
-        ground_truth_path = f_gt.name
-
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as f_res:
-        json.dump(generated_captions_pycoco, f_res)
-        results_path = f_res.name
-
     # Get generated captions list, list of list of reference captions
     generated_captions = _get_generated_captions_from_list_of_dicts(
         generated_captions_pycoco
@@ -545,6 +566,8 @@ def benchmark_model_captioning_processed_dataloader(
     )
     clip_model.to(model_device)
 
+    print("\n+-+-+-📝 Evaluating captions+-+-+-+\n")
+
     # Compute CLIP and reference-aware CLIP scores
     print("📊 Computing CLIP scores...")
     clip_score = compute_clip_score(
@@ -565,11 +588,7 @@ def benchmark_model_captioning_processed_dataloader(
         batch_size=clip_batch_size,
     )
 
-    # Compute BERT scores
-    print("📊 Computing BERT scores...")
-    bert_score = compute_bert_scores(generated_captions, reference_captions)
-
-    # Move model back to GPU
+    # Move model back to CPU
     clip_model.to("cpu")
 
     # Clean up
@@ -579,25 +598,20 @@ def benchmark_model_captioning_processed_dataloader(
     # Move model back to original device
     model.to(model_device)
 
-    # Evaluate captions using COCO metrics
-    print("\n+-+-+-📝 Evaluating captions+-+-+-+\n")
-    with open(os.devnull, "w") as fnull, contextlib.redirect_stdout(fnull):
-        coco = COCO(ground_truth_path)
-        coco_result = coco.loadRes(results_path)
-        coco_eval = COCOEvalCap(coco, coco_result)
-        coco_eval.params["image_id"] = coco_result.getImgIds()
-        coco_eval.evaluate()
+    # Compute CIDEr score
+    print("📊 Computing CIDEr score...")
+    cider_format_predictions = {
+        idx: [generated_captions[idx]] for idx in range(len(generated_captions))
+    }
+    cider_format_ground_truths = {
+        idx: reference_captions[idx] for idx in range(len(reference_captions))
+    }
+    cider, _ = Cider(backend="pycocoeval").compute_score(
+        cider_format_ground_truths, cider_format_predictions
+    )
 
     return {
-        "BLEU-1": coco_eval.eval["Bleu_1"],
-        "BLEU-2": coco_eval.eval["Bleu_2"],
-        "BLEU-3": coco_eval.eval["Bleu_3"],
-        "BLEU-4": coco_eval.eval["Bleu_4"],
-        "METEOR": coco_eval.eval["METEOR"],
-        "ROUGE-L": coco_eval.eval["ROUGE_L"],
-        "CIDEr": coco_eval.eval["CIDEr"],
-        "SPICE": coco_eval.eval["SPICE"],
+        "CIDEr": cider,
         "CLIP-S": clip_score,
         "RefCLIP-S": ref_clip_score,
-        "BERT-S": bert_score,
     }

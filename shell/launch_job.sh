@@ -6,7 +6,7 @@ PARTITION="DGX"
 GPUS=1
 CPUS=48
 MEM="100GB"
-TIME="06:00:00"
+TIME="01:00:00"
 
 # TIME="03:10:00"
 # MEM="100GB"
@@ -17,7 +17,7 @@ PROJECT_ROOT="$HOME/multimodal_finetuned_representations"
 LOG_DIR="$PROJECT_ROOT/.experiments_logs"
 mkdir -p "$LOG_DIR"
 
-SCRIPT="residual_stream_trace_and_measures_evaluation.sh"
+SCRIPT="modalities_similarities.sh"
 
 # ====================== SBATCH Script Creation ====================== #
 SBATCH_SCRIPT=$(mktemp /tmp/sbatch_experiment.XXXXXX.sh)

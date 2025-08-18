@@ -356,8 +356,10 @@ class ImageCaptioningDataset(Dataset):
         dataset_path_or_name: str,
         downsample_size: Optional[int] = None,
         seed: int = 42,
+        concatenate_captions: bool = False,
     ):
         dataset_dir = os.path.expanduser(dataset_path_or_name)
+        self.concatenate_captions = concatenate_captions
 
         if not os.path.exists(dataset_dir):
             raise FileNotFoundError(f"Dataset directory not found: {dataset_dir}")
@@ -383,10 +385,17 @@ class ImageCaptioningDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         data = self.dataset[idx]
         captions = data["captions"]
+        prompt = ""
+        if self.concatenate_captions:
+            prompt = f"Below are {len(captions)} numbered descriptions of the image. Please generate an additional description of the image. The caption should be a single sentence, not multiple sentences!!!\n\n"
+            for idx, caption in zip(range(len(captions)), captions):
+                prompt += f"{idx + 1}: {caption}\n"
+        else:
+            prompt = SHORT_CAPTION_PROMPT
 
         sample = {
             # for simplicity I add the prompt here
-            "user_prompt": SHORT_CAPTION_PROMPT,
+            "user_prompt": prompt,
             "captions": captions,
             "image_id": extract_image_id(data["image_id"]),
             "image": data["image"],
@@ -643,18 +652,6 @@ def collate_captioning_batch(
         }
 
         tokenized = processor(**processor_kwargs)
-<<<<<<< HEAD
-        # todo: improve this, it is not neat
-        if return_captions and return_image_ids:
-            return tokenized, captions, image_ids
-        elif return_captions and return_images and return_image_ids:
-            return tokenized, captions, images, image_ids
-        elif return_captions and return_images:
-            return tokenized, captions, images
-        elif return_captions:
-            return tokenized, captions
-        return tokenized
-=======
         # Build return tuple based on requested data
         result = [tokenized]
         if return_captions:
@@ -663,9 +660,8 @@ def collate_captioning_batch(
             result.append(image_ids)
         if return_images:
             result.append(images)
-        
+
         return tuple(result) if len(result) > 1 else result[0]
->>>>>>> main
 
     # Raw mode (default)
     return {
@@ -778,11 +774,13 @@ def get_dataloader_for_captioning(
     return_captions: bool = False,
     return_image_ids: bool = False,
     return_images: bool = False,
+    concatenate_captions: bool = False,
 ):
     dataset = ImageCaptioningDataset(
         dataset_path_or_name=dataset_path_or_name,
         downsample_size=downsample_size,
         seed=seed,
+        concatenate_captions=concatenate_captions,
     )
 
     collate_fn = partial(

@@ -44,6 +44,7 @@ class ResultsLoader:
             - dataset_name
                 - stream_type
                     - layers_cosine_similarity tensor of shape (layers,)
+                    - homogeneity_score_<metric> tensor of shape (layers,) for each metric (euclidean, cosine)
     - data["transplanting_layers_caption_benchmarking"]
         - dataset_name
             - experiment_name, e.g.,
@@ -597,6 +598,7 @@ class ResultsLoader:
                     modalities_similarities[model_key] = {}
 
                 modalities_dir = model_dir / "modalities_similarity"
+
                 if not modalities_dir.exists():
                     continue
 
@@ -615,11 +617,17 @@ class ResultsLoader:
 
                     # Extract stream type and similarity type from filename
                     # e.g., "output_layer_sample_cosine_similarity" -> "output_layer", "cosine_similarity"
-                    # e.g., "output_layer_sample_homogeneity_score" -> "output_layer", "homogeneity_score"
+                    # e.g., "output_layer_sample_homogeneity_score_euclidean" -> "output_layer", "homogeneity_score_euclidean"
                     if "_cosine_similarity" in filename:
                         stream_type = filename.replace("_sample_cosine_similarity", "")
                         similarity_type = "cosine_similarity"
+                    elif "_homogeneity_score_" in filename:
+                        # Extract metric from filename (e.g., "euclidean", "cosine")
+                        metric = filename.split("_homogeneity_score_")[-1].replace(".safetensors", "")
+                        stream_type = filename.replace(f"_sample_homogeneity_score_{metric}", "")
+                        similarity_type = f"homogeneity_score_{metric}"
                     elif "_homogeneity_score" in filename:
+                        # Legacy support for old format without metric
                         stream_type = filename.replace("_sample_homogeneity_score", "")
                         similarity_type = "homogeneity_score"
                     else:
@@ -640,14 +648,37 @@ class ResultsLoader:
                             "cosine_similarity"
                         ] = data["layers_cosine_similarity"]
                     elif (
+                        similarity_type.startswith("homogeneity_score_")
+                        and "layers_homogeneity_scores" in data
+                    ):
+                        modalities_similarities[model_key][dataset][stream_type][
+                            similarity_type
+                        ] = data["layers_homogeneity_scores"]
+                    elif (
                         similarity_type == "homogeneity_score"
                         and "layers_homogeneity_scores" in data
                     ):
+                        # Legacy support for old format
                         modalities_similarities[model_key][dataset][stream_type][
                             "homogeneity_score"
                         ] = data["layers_homogeneity_scores"]
                     else:
                         print(f"⚠️  No {similarity_type} data found in {filename}")
+
+        # Filter out raw homogeneity_score entries when metric-specific ones exist
+        for model_key in modalities_similarities:
+            for dataset in modalities_similarities[model_key]:
+                for stream_type in modalities_similarities[model_key][dataset]:
+                    stream_data = modalities_similarities[model_key][dataset][stream_type]
+                    
+                    # Check if we have metric-specific homogeneity scores
+                    has_metric_specific = any(
+                        key.startswith("homogeneity_score_") for key in stream_data.keys()
+                    )
+                    
+                    # If we have metric-specific scores, remove the raw homogeneity_score
+                    if has_metric_specific and "homogeneity_score" in stream_data:
+                        del stream_data["homogeneity_score"]
 
         return modalities_similarities
 
@@ -795,7 +826,8 @@ class ResultsLoader:
             model: Model name
             dataset: Dataset name
             stream_type: Stream type (e.g., "output_layer", "post_mlp")
-            similarity_type: Type of similarity ("cosine_similarity" or "homogeneity_score")
+            similarity_type: Type of similarity ("cosine_similarity", "homogeneity_score", 
+                           "homogeneity_score_euclidean", or "homogeneity_score_cosine")
 
         Returns:
             torch.Tensor: Similarity data for the specified type

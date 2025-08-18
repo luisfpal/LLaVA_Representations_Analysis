@@ -3,6 +3,7 @@ from typing import List, Optional
 from functools import partial
 import torch
 from pathlib import Path
+import re
 from utils import plot_similarity_measure_matrix
 from config_results_loader import ResultsLoader
 
@@ -11,7 +12,7 @@ from config_results_loader import ResultsLoader
 DEFAULT_MEASURES = ["neighborhood_overlap", "linear_cka"]
 DEFAULT_POOLING_METHODS = ["last", "mean"]
 PROMPT_ENTROPY_POOLING = ["none"]
-PLOTS_DIR = Path(__file__).parent.parent / "plots_coco_captioning"
+PLOTS_DIR = Path(__file__).parent.parent / "plots"
 
 
 def save_plot_if_requested(save_plots: bool, filename: str):
@@ -869,15 +870,20 @@ def _extract_max_tokens_from_directory(directory_name: str) -> int:
         directory_name: Directory name (e.g., 'transplanting_layers_caption_benchmarking_max_new_tokens_20')
 
     Returns:
-        int: Number of max_new_tokens (default: 50)
+        int: Number of max_new_tokens
+
+    Raises:
+        ValueError: If max_new_tokens value cannot be extracted from directory name
     """
-    # ! todo: change the name of the dedault directory to include the max_new_tokens
-    # todo: and then extract the max_new_tokens from the directory name and not
-    # hardcoded here
-    if "max_new_tokens_20" in directory_name:
-        return 20
+
+    # Extract integer after "max_new_tokens_"
+    match = re.search(r"max_new_tokens_(\d+)", directory_name)
+    if match:
+        return int(match.group(1))
     else:
-        return 50  # Default for transplanting_layers_caption_benchmarking
+        raise ValueError(
+            f"Could not extract max_new_tokens value from directory name: {directory_name}"
+        )
 
 
 def _extract_caption_benchmarking_data(data_df, method, metric_name):
@@ -954,7 +960,7 @@ def plot_caption_benchmarking_for_directory(
 
     Args:
         results_loader: ResultsLoader instance with loaded data
-        metric_name: Metric to plot ('CIDEr', 'SPICE', 'CLIP-S', 'RefCLIP-S', or 'BERT-S')
+        metric_name: Metric to plot ('CIDEr', 'CLIP-S', 'RefCLIP-S')
         directory_name: Directory name (e.g., 'transplanting_layers_caption_benchmarking')
         save_plots: Whether to save plots instead of showing them
     """
@@ -1148,7 +1154,7 @@ def plot_all_transplanting_layers_caption_benchmarking(
     _print_caption_benchmarking_summary(results_loader)
 
     # Available metrics - plot each metric separately
-    metrics = ["CIDEr", "SPICE", "CLIP-S", "RefCLIP-S", "BERT-S"]
+    metrics = ["CIDEr", "CLIP-S", "RefCLIP-S"]
 
     # Available directories from config
     caption_directories = results_loader.config.get("caption_benchmarking", {}).get(
@@ -1174,7 +1180,8 @@ def plot_modalities_similarities(
     Args:
         results_loader: ResultsLoader instance with loaded data
         stream_types: List of stream types to plot (e.g., ['output_layer', 'post_mlp'])
-        similarity_type: Type of similarity to plot ("cosine_similarity" or "homogeneity_score")
+        similarity_type: Type of similarity to plot ("cosine_similarity", "homogeneity_score",
+                       "homogeneity_score_euclidean", or "homogeneity_score_cosine")
         save_plots: Whether to save plots instead of showing them
     """
     print(f"\n📊 Plotting modalities similarities: {similarity_type}")
@@ -1206,7 +1213,7 @@ def plot_modalities_similarities(
     model_colors = {"full": "blue", "pretrained": "red"}
 
     # Define linestyles and markers for stream types (using dashed lines and markers for discrete data)
-    stream_styles = {"output_layer": "--", "post_mlp": ":"}
+    stream_styles = {"output_layer": "-", "post_mlp": "--"}
     stream_markers = {"output_layer": "o", "post_mlp": "s"}
 
     # Collect all data values for Y limits
@@ -1255,11 +1262,15 @@ def plot_modalities_similarities(
         ax.set_title(f"{dataset}", fontsize=14, fontweight="bold")
         ax.set_xlabel("Layer", fontsize=12)
         if d_idx == 0:  # Only first subplot gets y-label
-            y_label = (
-                "Cosine Similarity"
-                if similarity_type == "cosine_similarity"
-                else "Homogeneity Score"
-            )
+            if similarity_type == "cosine_similarity":
+                y_label = "Cosine Similarity"
+            elif similarity_type.startswith("homogeneity_score_"):
+                metric = similarity_type.split("_")[-1]
+                y_label = f"Homogeneity Score ({metric})"
+            elif similarity_type == "homogeneity_score":
+                y_label = "Homogeneity Score"
+            else:
+                y_label = "Similarity"
             ax.set_ylabel(y_label, fontsize=12)
         else:
             # Remove Y-axis elements for non-first subplots
@@ -1323,6 +1334,11 @@ def plot_modalities_similarities(
             similarity_type_kwargs["models"]["bbox_to_anchor"] = (0.0, 1)
             similarity_type_kwargs["stream_types"]["loc"] = "upper left"
             similarity_type_kwargs["stream_types"]["bbox_to_anchor"] = (0.0, 0.95)
+        elif similarity_type.startswith("homogeneity_score_"):
+            similarity_type_kwargs["models"]["loc"] = "lower left"
+            similarity_type_kwargs["models"]["bbox_to_anchor"] = (0.0, 0.05)
+            similarity_type_kwargs["stream_types"]["loc"] = "lower left"
+            similarity_type_kwargs["stream_types"]["bbox_to_anchor"] = (0.0, 0.0)
         elif similarity_type == "homogeneity_score":
             similarity_type_kwargs["models"]["loc"] = "lower left"
             similarity_type_kwargs["models"]["bbox_to_anchor"] = (0.0, 0.05)
@@ -1361,11 +1377,15 @@ def plot_modalities_similarities(
         )
 
     # Set overall title based on similarity type
-    title = (
-        "Cosine similarity of trailing text and image embeddings"
-        if similarity_type == "cosine_similarity"
-        else "Homogeneity score of trailing text and image embeddings"
-    )
+    if similarity_type == "cosine_similarity":
+        title = "Cosine similarity of trailing text and image embeddings"
+    elif similarity_type.startswith("homogeneity_score_"):
+        metric = similarity_type.split("_")[-1]
+        title = f"Homogeneity score ({metric}) of trailing text and image embeddings"
+    elif similarity_type == "homogeneity_score":
+        title = "Homogeneity score of trailing text and image embeddings"
+    else:
+        title = f"Similarity ({similarity_type}) of trailing text and image embeddings"
     plt.suptitle(title, fontsize=16, fontweight="bold", y=0.98)
     plt.tight_layout()
 
@@ -1425,21 +1445,27 @@ def main(save_plots: bool = False):
     # plot_all_output_layer_similarity_measures(results, save_plots=save_plots)
     # plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
     # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
-    plot_all_model_data_measures(results, save_plots=save_plots)
+    # plot_all_model_data_measures(results, save_plots=save_plots)
     # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
     # plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
-    # plot_modalities_similarities(
-    #     results,
-    #     ["output_layer", "post_mlp"],
-    #     "cosine_similarity",
-    #     save_plots=save_plots,
-    # )
-    # plot_modalities_similarities(
-    #     results,
-    #     ["output_layer", "post_mlp"],
-    #     "homogeneity_score",
-    #     save_plots=save_plots,
-    # )
+    plot_modalities_similarities(
+        results,
+        ["output_layer", "post_mlp"],
+        "cosine_similarity",
+        save_plots=save_plots,
+    )
+    plot_modalities_similarities(
+        results,
+        ["output_layer", "post_mlp"],
+        "homogeneity_score_euclidean",
+        save_plots=save_plots,
+    )
+    plot_modalities_similarities(
+        results,
+        ["output_layer", "post_mlp"],
+        "homogeneity_score_cosine",
+        save_plots=save_plots,
+    )
 
 
 if __name__ == "__main__":
