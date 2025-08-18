@@ -1,11 +1,37 @@
+import matplotlib
+
+matplotlib.use("Agg")  # Use non-interactive backend to avoid display issues
 import matplotlib.pyplot as plt
-from typing import List, Optional
+from typing import List, Optional, Union
 from functools import partial
 import torch
+import numpy as np
 from pathlib import Path
 import re
 from utils import plot_similarity_measure_matrix
 from config_results_loader import ResultsLoader
+
+
+def safe_tensor_to_numpy(
+    data: Union[torch.Tensor, np.ndarray, list, float, int],
+) -> np.ndarray:
+    """
+    Safely convert various data types to numpy array.
+
+    Args:
+        data: Input data that could be a tensor, numpy array, or other numeric type
+
+    Returns:
+        numpy.ndarray: Converted numpy array
+    """
+    if isinstance(data, torch.Tensor):
+        return data.detach().cpu().numpy()
+    elif isinstance(data, np.ndarray):
+        return data
+    elif isinstance(data, (list, tuple)):
+        return np.array(data)
+    else:
+        return np.array([data])
 
 
 # Constants for commonly used values
@@ -233,6 +259,9 @@ def template_ax_plot(
     """
     Plot data on a single axis.
     """
+    # Ensure data is a numpy array
+    data = safe_tensor_to_numpy(data)
+
     # For 1D data (mean heads projection), plot as a line
     if data.ndim == 1:
         ax.plot(range(len(data)), data, **kwargs)
@@ -298,7 +327,7 @@ def template_plot_similarity_measures(
                         measure=measure,
                     )
                     if isinstance(data, torch.Tensor):
-                        data = data.numpy()
+                        data = safe_tensor_to_numpy(data)
 
                     # Collect data for Y limits calculation
                     min_all_data_values.append(data.min())
@@ -524,7 +553,7 @@ def template_plot_model_data_measures(
                         data = data_dict
 
                     if isinstance(data, torch.Tensor):
-                        data = data.numpy()
+                        data = safe_tensor_to_numpy(data)
 
                     # Collect data for Y limits calculation
                     all_data_values.extend(data.flatten())
@@ -1232,7 +1261,7 @@ def plot_modalities_similarities(
                     )
 
                     if isinstance(similarity_data, torch.Tensor):
-                        similarity_data = similarity_data.numpy()
+                        similarity_data = safe_tensor_to_numpy(similarity_data)
 
                     # Collect data for Y limits
                     all_data_values.extend(similarity_data)
@@ -1393,6 +1422,40 @@ def plot_modalities_similarities(
     save_plot_if_requested(save_plots, filename)
 
 
+def test_plot(results_loader: ResultsLoader):
+    data = results_loader.data["modalities_similarities"]
+    print(data.keys())
+    full_model = data["full"]
+    print(full_model.keys())
+    coco_captioning = full_model["coco_captioning"]
+    print(coco_captioning.keys())
+    output_layer = coco_captioning["output_layer"]
+    print(output_layer.keys())
+    homogeneity_score_cosine = output_layer["homogeneity_score_cosine"]
+    print(homogeneity_score_cosine)
+
+    # Safely convert tensor to numpy array using helper function
+    homogeneity_score_cosine_np = safe_tensor_to_numpy(homogeneity_score_cosine)
+
+    # Create plot and save it instead of showing it
+    plt.figure(figsize=(8, 6))
+    plt.plot(homogeneity_score_cosine_np, linestyle="--", marker="o")
+    plt.title("Test Plot - Homogeneity Score Cosine")
+    plt.xlabel("Layer")
+    plt.ylabel("Homogeneity Score")
+    plt.grid(True, alpha=0.3)
+
+    # Save the plot instead of showing it to avoid segmentation fault
+    PLOTS_DIR.mkdir(exist_ok=True)
+    plt.savefig(
+        PLOTS_DIR / "test_plot_homogeneity_score_cosine.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close()
+    print("✅ Test plot saved successfully!")
+
+
 def main(save_plots: bool = False):
     """Main function to demonstrate similarity measures heatmap."""
     # Initialize results loader and load all data
@@ -1448,24 +1511,25 @@ def main(save_plots: bool = False):
     # plot_all_model_data_measures(results, save_plots=save_plots)
     # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
     # plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
-    plot_modalities_similarities(
-        results,
-        ["output_layer", "post_mlp"],
-        "cosine_similarity",
-        save_plots=save_plots,
-    )
-    plot_modalities_similarities(
-        results,
-        ["output_layer", "post_mlp"],
-        "homogeneity_score_euclidean",
-        save_plots=save_plots,
-    )
-    plot_modalities_similarities(
-        results,
-        ["output_layer", "post_mlp"],
-        "homogeneity_score_cosine",
-        save_plots=save_plots,
-    )
+    # plot_modalities_similarities(
+    #     results,
+    #     ["output_layer", "post_mlp"],
+    #     "cosine_similarity",
+    #     save_plots=save_plots,
+    # )
+    # plot_modalities_similarities(
+    #     results,
+    #     ["output_layer", "post_mlp"],
+    #     "homogeneity_score_euclidean",
+    #     save_plots=save_plots,
+    # )
+    # plot_modalities_similarities(
+    #     results,
+    #     ["output_layer", "post_mlp"],
+    #     "homogeneity_score_cosine",
+    #     save_plots=save_plots,
+    # )
+    test_plot(results)
 
 
 if __name__ == "__main__":

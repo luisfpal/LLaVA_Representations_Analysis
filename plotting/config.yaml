@@ -34,8 +34,5 @@ modalities_similarities:
 # Caption benchmarking configuration
 caption_benchmarking:
   directories:
-    # - "transplanting_layers_caption_benchmarking_max_new_tokens_20"
-    - "transplanting_layers_caption_benchmarking_max_new_tokens_30"
-    # - "transplanting_layers_caption_benchmarking_max_new_tokens_50"
     - "transplanting_layers_caption_benchmarking_max_new_tokens_100"
   experiment_types: ["sliding_window", "two_parts"]
