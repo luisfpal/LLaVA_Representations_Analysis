@@ -66,9 +66,23 @@ class ResultsLoader:
         with open(config_path, "r") as f:
             self.config = yaml.safe_load(f)
 
+        # Initialize results directories
         self.results_dir = config_path.parent / self.config["paths"]["results"]
         if not self.results_dir.exists():
             raise FileNotFoundError(f"Results directory not found: {self.results_dir}")
+
+        # Initialize coco_captioning results directory if specified
+        if "results_coco_captioning" in self.config["paths"]:
+            self.results_coco_captioning_dir = (
+                config_path.parent / self.config["paths"]["results_coco_captioning"]
+            )
+            if not self.results_coco_captioning_dir.exists():
+                print(
+                    f"⚠️  Coco captioning results directory not found: {self.results_coco_captioning_dir}"
+                )
+                self.results_coco_captioning_dir = None
+        else:
+            self.results_coco_captioning_dir = None
 
         self.data = {}
 
@@ -96,20 +110,38 @@ class ResultsLoader:
 
         for dataset in self.config["datasets"]:
             model_data_measures[dataset] = {}
+
+            # Try loading from main results directory
             models_dir = self.results_dir / dataset / "models_data_measures"
+            if models_dir.exists():
+                for model_dir in models_dir.iterdir():
+                    if model_dir.is_dir():
+                        model_key = self.config["models"].get(
+                            model_dir.name, model_dir.name
+                        )
+                        model_data_measures[dataset][model_key] = (
+                            self._load_model_measures(model_dir)
+                        )
 
-            if not models_dir.exists():
+            # Try loading from coco_captioning results directory if available
+            if self.results_coco_captioning_dir is not None:
+                coco_models_dir = (
+                    self.results_coco_captioning_dir / dataset / "models_data_measures"
+                )
+                if coco_models_dir.exists():
+                    for model_dir in coco_models_dir.iterdir():
+                        if model_dir.is_dir():
+                            model_key = self.config["models"].get(
+                                model_dir.name, model_dir.name
+                            )
+                            # Only load if not already loaded from main directory
+                            if model_key not in model_data_measures[dataset]:
+                                model_data_measures[dataset][model_key] = (
+                                    self._load_model_measures(model_dir)
+                                )
+
+            if not model_data_measures[dataset]:
                 print(f"⚠️  No model data measures found for {dataset}")
-                continue
-
-            for model_dir in models_dir.iterdir():
-                if model_dir.is_dir():
-                    model_key = self.config["models"].get(
-                        model_dir.name, model_dir.name
-                    )
-                    model_data_measures[dataset][model_key] = self._load_model_measures(
-                        model_dir
-                    )
 
         return model_data_measures
 
@@ -152,40 +184,76 @@ class ResultsLoader:
 
         for dataset in self.config["datasets"]:
             models_similarities[dataset] = {}
+
+            # Try loading from main results directory
             sim_dir = self.results_dir / dataset / "similarities"
+            if sim_dir.exists():
+                for file_path in sim_dir.glob("*.safetensors"):
+                    filename = file_path.stem
 
-            if not sim_dir.exists():
+                    try:
+                        data = load_file(str(file_path))
+                        # dictionary with :
+                        #  - neighborhood_overlap
+                        #  - linear_cka
+                        #  - svcca
+                    except Exception as e:
+                        print(f"⚠️  Failed to load {filename}: {e}")
+                        continue
+
+                    if "_vs_" in filename:
+                        # Extract stream_type and pooling from filename
+                        parts = filename.split("_vs_")[-1].split("_")
+                        stream_type = "_".join(parts[1:-1])
+                        pooling = parts[-1]
+                        key = f"{stream_type}_{pooling}"
+
+                        # Initialize nested structure if needed
+                        if key not in models_similarities[dataset]:
+                            models_similarities[dataset][key] = {}
+
+                        # The loaded data is already a dictionary with measures as keys
+                        # Merge the data into our structure
+                        for measure_name, measure_data in data.items():
+                            models_similarities[dataset][key][measure_name] = (
+                                measure_data
+                            )
+
+            # Try loading from coco_captioning results directory if available
+            if self.results_coco_captioning_dir is not None:
+                coco_sim_dir = (
+                    self.results_coco_captioning_dir / dataset / "similarities"
+                )
+                if coco_sim_dir.exists():
+                    for file_path in coco_sim_dir.glob("*.safetensors"):
+                        filename = file_path.stem
+
+                        try:
+                            data = load_file(str(file_path))
+                        except Exception as e:
+                            print(f"⚠️  Failed to load {filename}: {e}")
+                            continue
+
+                        if "_vs_" in filename:
+                            # Extract stream_type and pooling from filename
+                            parts = filename.split("_vs_")[-1].split("_")
+                            stream_type = "_".join(parts[1:-1])
+                            pooling = parts[-1]
+                            key = f"{stream_type}_{pooling}"
+
+                            # Initialize nested structure if needed
+                            if key not in models_similarities[dataset]:
+                                models_similarities[dataset][key] = {}
+
+                            # The loaded data is already a dictionary with measures as keys
+                            # Merge the data into our structure
+                            for measure_name, measure_data in data.items():
+                                models_similarities[dataset][key][measure_name] = (
+                                    measure_data
+                                )
+
+            if not models_similarities[dataset]:
                 print(f"⚠️  No model similarities found for {dataset}")
-                continue
-
-            for file_path in sim_dir.glob("*.safetensors"):
-                filename = file_path.stem
-
-                try:
-                    data = load_file(str(file_path))
-                    # dictionary with :
-                    #  - neighborhood_overlap
-                    #  - linear_cka
-                    #  - svcca
-                except Exception as e:
-                    print(f"⚠️  Failed to load {filename}: {e}")
-                    continue
-
-                if "_vs_" in filename:
-                    # Extract stream_type and pooling from filename
-                    parts = filename.split("_vs_")[-1].split("_")
-                    stream_type = "_".join(parts[1:-1])
-                    pooling = parts[-1]
-                    key = f"{stream_type}_{pooling}"
-
-                    # Initialize nested structure if needed
-                    if key not in models_similarities[dataset]:
-                        models_similarities[dataset][key] = {}
-
-                    # The loaded data is already a dictionary with measures as keys
-                    # Merge the data into our structure
-                    for measure_name, measure_data in data.items():
-                        models_similarities[dataset][key][measure_name] = measure_data
 
         return models_similarities
 
@@ -579,103 +647,126 @@ class ResultsLoader:
         )
 
         for dataset in datasets_with_modalities:
+            # Try loading from main results directory
             dataset_dir = self.results_dir / dataset
+            if dataset_dir.exists():
+                self._load_modalities_similarities_from_directory(
+                    dataset_dir, dataset, modalities_similarities
+                )
 
-            if not dataset_dir.exists():
-                print(f"⚠️  Dataset directory not found: {dataset}")
+            # Try loading from coco_captioning results directory if available
+            if self.results_coco_captioning_dir is not None:
+                coco_dataset_dir = self.results_coco_captioning_dir / dataset
+                if coco_dataset_dir.exists():
+                    self._load_modalities_similarities_from_directory(
+                        coco_dataset_dir, dataset, modalities_similarities
+                    )
+
+        return modalities_similarities
+
+    def _load_modalities_similarities_from_directory(
+        self, dataset_dir: Path, dataset: str, modalities_similarities: Dict[str, Any]
+    ):
+        """Helper method to load modalities similarities from a specific directory."""
+        # Look for model directories within the dataset
+        for model_dir in dataset_dir.iterdir():
+            if not model_dir.is_dir():
                 continue
 
-            # Look for model directories within the dataset
-            for model_dir in dataset_dir.iterdir():
-                if not model_dir.is_dir():
-                    continue
+            model_name = model_dir.name
+            model_key = self.config["models"].get(model_name, model_name)
 
-                model_name = model_dir.name
-                model_key = self.config["models"].get(model_name, model_name)
+            # Initialize model structure if not exists
+            if model_key not in modalities_similarities:
+                modalities_similarities[model_key] = {}
 
-                # Initialize model structure if not exists
-                if model_key not in modalities_similarities:
-                    modalities_similarities[model_key] = {}
+            modalities_dir = model_dir / "modalities_similarity"
 
-                modalities_dir = model_dir / "modalities_similarity"
+            if not modalities_dir.exists():
+                continue
 
-                if not modalities_dir.exists():
-                    continue
-
-                # Initialize dataset structure
+            # Initialize dataset structure if not exists
+            if dataset not in modalities_similarities[model_key]:
                 modalities_similarities[model_key][dataset] = {}
 
-                # Load safetensors files
-                for file_path in modalities_dir.glob("*.safetensors"):
-                    filename = file_path.stem
+            # Load safetensors files
+            for file_path in modalities_dir.glob("*.safetensors"):
+                filename = file_path.stem
 
-                    try:
-                        data = load_file(str(file_path))
-                    except Exception as e:
-                        print(f"⚠️  Failed to load {filename}: {e}")
-                        continue
+                try:
+                    data = load_file(str(file_path))
+                except Exception as e:
+                    print(f"⚠️  Failed to load {filename}: {e}")
+                    continue
 
-                    # Extract stream type and similarity type from filename
-                    # e.g., "output_layer_sample_cosine_similarity" -> "output_layer", "cosine_similarity"
-                    # e.g., "output_layer_sample_homogeneity_score_euclidean" -> "output_layer", "homogeneity_score_euclidean"
-                    if "_cosine_similarity" in filename:
-                        stream_type = filename.replace("_sample_cosine_similarity", "")
-                        similarity_type = "cosine_similarity"
-                    elif "_homogeneity_score_" in filename:
-                        # Extract metric from filename (e.g., "euclidean", "cosine")
-                        metric = filename.split("_homogeneity_score_")[-1].replace(".safetensors", "")
-                        stream_type = filename.replace(f"_sample_homogeneity_score_{metric}", "")
-                        similarity_type = f"homogeneity_score_{metric}"
-                    elif "_homogeneity_score" in filename:
-                        # Legacy support for old format without metric
-                        stream_type = filename.replace("_sample_homogeneity_score", "")
-                        similarity_type = "homogeneity_score"
-                    else:
-                        # Legacy support for old format
-                        stream_type = filename.replace("_sample", "")
-                        similarity_type = "cosine_similarity"
+                # Extract stream type and similarity type from filename
+                # e.g., "output_layer_sample_cosine_similarity" -> "output_layer", "cosine_similarity"
+                # e.g., "output_layer_sample_homogeneity_score_euclidean" -> "output_layer", "homogeneity_score_euclidean"
+                if "_cosine_similarity" in filename:
+                    stream_type = filename.replace("_sample_cosine_similarity", "")
+                    similarity_type = "cosine_similarity"
+                elif "_homogeneity_score_" in filename:
+                    # Extract metric from filename (e.g., "euclidean", "cosine")
+                    metric = filename.split("_homogeneity_score_")[-1].replace(
+                        ".safetensors", ""
+                    )
+                    stream_type = filename.replace(
+                        f"_sample_homogeneity_score_{metric}", ""
+                    )
+                    similarity_type = f"homogeneity_score_{metric}"
+                elif "_homogeneity_score" in filename:
+                    # Legacy support for old format without metric
+                    stream_type = filename.replace("_sample_homogeneity_score", "")
+                    similarity_type = "homogeneity_score"
+                else:
+                    # Legacy support for old format
+                    stream_type = filename.replace("_sample", "")
+                    similarity_type = "cosine_similarity"
 
-                    # Initialize stream type structure if not exists
-                    if stream_type not in modalities_similarities[model_key][dataset]:
-                        modalities_similarities[model_key][dataset][stream_type] = {}
+                # Initialize stream type structure if not exists
+                if stream_type not in modalities_similarities[model_key][dataset]:
+                    modalities_similarities[model_key][dataset][stream_type] = {}
 
-                    # Store the appropriate tensor based on similarity type
-                    if (
-                        similarity_type == "cosine_similarity"
-                        and "layers_cosine_similarity" in data
-                    ):
-                        modalities_similarities[model_key][dataset][stream_type][
-                            "cosine_similarity"
-                        ] = data["layers_cosine_similarity"]
-                    elif (
-                        similarity_type.startswith("homogeneity_score_")
-                        and "layers_homogeneity_scores" in data
-                    ):
-                        modalities_similarities[model_key][dataset][stream_type][
-                            similarity_type
-                        ] = data["layers_homogeneity_scores"]
-                    elif (
-                        similarity_type == "homogeneity_score"
-                        and "layers_homogeneity_scores" in data
-                    ):
-                        # Legacy support for old format
-                        modalities_similarities[model_key][dataset][stream_type][
-                            "homogeneity_score"
-                        ] = data["layers_homogeneity_scores"]
-                    else:
-                        print(f"⚠️  No {similarity_type} data found in {filename}")
+                # Store the appropriate tensor based on similarity type
+                if (
+                    similarity_type == "cosine_similarity"
+                    and "layers_cosine_similarity" in data
+                ):
+                    modalities_similarities[model_key][dataset][stream_type][
+                        "cosine_similarity"
+                    ] = data["layers_cosine_similarity"]
+                elif (
+                    similarity_type.startswith("homogeneity_score_")
+                    and "layers_homogeneity_scores" in data
+                ):
+                    modalities_similarities[model_key][dataset][stream_type][
+                        similarity_type
+                    ] = data["layers_homogeneity_scores"]
+                elif (
+                    similarity_type == "homogeneity_score"
+                    and "layers_homogeneity_scores" in data
+                ):
+                    # Legacy support for old format
+                    modalities_similarities[model_key][dataset][stream_type][
+                        "homogeneity_score"
+                    ] = data["layers_homogeneity_scores"]
+                else:
+                    print(f"⚠️  No {similarity_type} data found in {filename}")
 
         # Filter out raw homogeneity_score entries when metric-specific ones exist
         for model_key in modalities_similarities:
             for dataset in modalities_similarities[model_key]:
                 for stream_type in modalities_similarities[model_key][dataset]:
-                    stream_data = modalities_similarities[model_key][dataset][stream_type]
-                    
+                    stream_data = modalities_similarities[model_key][dataset][
+                        stream_type
+                    ]
+
                     # Check if we have metric-specific homogeneity scores
                     has_metric_specific = any(
-                        key.startswith("homogeneity_score_") for key in stream_data.keys()
+                        key.startswith("homogeneity_score_")
+                        for key in stream_data.keys()
                     )
-                    
+
                     # If we have metric-specific scores, remove the raw homogeneity_score
                     if has_metric_specific and "homogeneity_score" in stream_data:
                         del stream_data["homogeneity_score"]
@@ -826,7 +917,7 @@ class ResultsLoader:
             model: Model name
             dataset: Dataset name
             stream_type: Stream type (e.g., "output_layer", "post_mlp")
-            similarity_type: Type of similarity ("cosine_similarity", "homogeneity_score", 
+            similarity_type: Type of similarity ("cosine_similarity", "homogeneity_score",
                            "homogeneity_score_euclidean", or "homogeneity_score_cosine")
 
         Returns:
@@ -876,6 +967,11 @@ class ResultsLoader:
             raise KeyError(
                 f"Caption benchmarking data not found: {dataset}/{experiment}"
             )
+
+    def get_display_name(self, dataset: str) -> str:
+        """Get the display name for a dataset."""
+        display_names = self.config.get("dataset_display_names", {})
+        return display_names.get(dataset, dataset)
 
     # === Summary Methods ===
 

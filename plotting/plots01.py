@@ -308,6 +308,7 @@ def template_plot_similarity_measures(
 
     datasets = results_loader.config["datasets"].copy()
     datasets.append("cocoqa_txt_minus_cocoqa_img")
+    datasets.remove("coco_captioning")
 
     # Collect all data to determine Y limits
     min_all_data_values = []
@@ -702,12 +703,12 @@ def plot_all_model_data_measures(
     """Plot all model data measures for different stream types and dataset measures."""
     # Define configurations for different combinations
     configs = [
-        ("dataset_entropy", "output_layer", DEFAULT_POOLING_METHODS),
-        ("prompt_entropy", "output_layer", PROMPT_ENTROPY_POOLING),
+        # ("dataset_entropy", "output_layer", DEFAULT_POOLING_METHODS),
+        # ("prompt_entropy", "output_layer", PROMPT_ENTROPY_POOLING),
         ("intrinsic_dimension", "output_layer", DEFAULT_POOLING_METHODS),
-        ("dataset_entropy", "post_mlp", DEFAULT_POOLING_METHODS),
-        ("prompt_entropy", "post_mlp", PROMPT_ENTROPY_POOLING),
-        ("intrinsic_dimension", "post_mlp", DEFAULT_POOLING_METHODS),
+        # ("dataset_entropy", "post_mlp", DEFAULT_POOLING_METHODS),
+        # ("prompt_entropy", "post_mlp", PROMPT_ENTROPY_POOLING),
+        # ("intrinsic_dimension", "post_mlp", DEFAULT_POOLING_METHODS),
     ]
 
     for dataset_measure, stream_type, pooling_methods in configs:
@@ -782,7 +783,7 @@ def plot_transplanting_layers_benchmarking(
             sorted_data = sorted(zip(layer_numbers, layer_accuracies))
             layer_numbers, layer_accuracies = zip(*sorted_data)
 
-            # Get full model and pretrained model accuracies
+            # Get f model and pretrained model accuracies
             fm_row = data_df[data_df[layer_names_column] == "mm_model"]
             pm_row = data_df[data_df[layer_names_column] == "mm_pretrained_connector"]
 
@@ -856,7 +857,7 @@ def plot_transplanting_layers_benchmarking(
 
     legend_elements = [
         Patch(facecolor="skyblue", label="Layer Transplantation"),
-        Patch(facecolor="lightgreen", label="Full Model (FM)"),
+        Patch(facecolor="lightgreen", label="Finetuned Model (FM)"),
         Patch(facecolor="lightcoral", label="Pretrained Model (PM)"),
     ]
     fig.legend(
@@ -1110,7 +1111,7 @@ def plot_caption_benchmarking_for_directory(
 
     legend_elements = [
         Patch(facecolor="skyblue", label="Layer Transplantation"),
-        Patch(facecolor="lightgreen", label="Full Model (FM)"),
+        Patch(facecolor="lightgreen", label="Finetuned Model (FM)"),
         Patch(facecolor="lightcoral", label="Pretrained Model (PM)"),
     ]
     fig.legend(
@@ -1239,7 +1240,7 @@ def plot_modalities_similarities(
         fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
 
     # Define colors for models
-    model_colors = {"full": "blue", "pretrained": "red"}
+    model_colors = {"finetuned": "blue", "pretrained": "red"}
 
     # Define linestyles and markers for stream types (using dashed lines and markers for discrete data)
     stream_styles = {"output_layer": "-", "post_mlp": "--"}
@@ -1422,40 +1423,6 @@ def plot_modalities_similarities(
     save_plot_if_requested(save_plots, filename)
 
 
-def test_plot(results_loader: ResultsLoader):
-    data = results_loader.data["modalities_similarities"]
-    print(data.keys())
-    full_model = data["full"]
-    print(full_model.keys())
-    coco_captioning = full_model["coco_captioning"]
-    print(coco_captioning.keys())
-    output_layer = coco_captioning["output_layer"]
-    print(output_layer.keys())
-    homogeneity_score_cosine = output_layer["homogeneity_score_cosine"]
-    print(homogeneity_score_cosine)
-
-    # Safely convert tensor to numpy array using helper function
-    homogeneity_score_cosine_np = safe_tensor_to_numpy(homogeneity_score_cosine)
-
-    # Create plot and save it instead of showing it
-    plt.figure(figsize=(8, 6))
-    plt.plot(homogeneity_score_cosine_np, linestyle="--", marker="o")
-    plt.title("Test Plot - Homogeneity Score Cosine")
-    plt.xlabel("Layer")
-    plt.ylabel("Homogeneity Score")
-    plt.grid(True, alpha=0.3)
-
-    # Save the plot instead of showing it to avoid segmentation fault
-    PLOTS_DIR.mkdir(exist_ok=True)
-    plt.savefig(
-        PLOTS_DIR / "test_plot_homogeneity_score_cosine.png",
-        dpi=300,
-        bbox_inches="tight",
-    )
-    plt.close()
-    print("✅ Test plot saved successfully!")
-
-
 def main(save_plots: bool = False):
     """Main function to demonstrate similarity measures heatmap."""
     # Initialize results loader and load all data
@@ -1485,18 +1452,19 @@ def main(save_plots: bool = False):
         results.create_dataset_measures_models_difference(
             dataset_name="cocoqa_txt",
             model1="pretrained",
-            model2="full",
+            model2="finetuned",
         )
         results.create_dataset_measures_models_difference(
             dataset_name="cocoqa_img",
             model1="pretrained",
-            model2="full",
+            model2="finetuned",
         )
-    elif "coco_captioning" in dataset_names:
+
+    if "coco_captioning" in dataset_names:
         results.create_dataset_measures_models_difference(
             dataset_name="coco_captioning",
             model1="pretrained",
-            model2="full",
+            model2="finetuned",
         )
 
     results.print_summary()
@@ -1529,7 +1497,6 @@ def main(save_plots: bool = False):
     #     "homogeneity_score_cosine",
     #     save_plots=save_plots,
     # )
-    test_plot(results)
 
 
 if __name__ == "__main__":

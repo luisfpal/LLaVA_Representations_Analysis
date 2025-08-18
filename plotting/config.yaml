@@ -1,18 +1,19 @@
 # Configuration for multimodal analysis results loader
 
-# File paths
+# File paths - support multiple results directories
 paths:
   results: "../results"
+  results_coco_captioning: "../results_coco_captioning"
 
 # Model name mappings
 models:
-  "llava-1.5-7b-hf": "full"
+  "llava-1.5-7b-hf": "finetuned"
   "llava-v1.5-mlp2x-336px-pretrain-vicuna-7b-v1.5": "pretrained"
 
 # Available datasets
 datasets:
   - "cocoqa_img"
-  # - "cocoqa_txt"
+  - "cocoqa_txt"
   - "coco_captioning"
 
 # Analysis parameters
