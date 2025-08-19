@@ -20,6 +20,7 @@ def plot_similarity_measure_matrix(
     max_yticks: Optional[int] = None,
     annot_font_size: int = 8,
     colorbar_labelsize: int = 12,
+    show_annotations: bool = True,
 ) -> None:
     """
     Create a similarity measure heatmap on a provided matplotlib axis.
@@ -39,6 +40,7 @@ def plot_similarity_measure_matrix(
         max_yticks: Maximum number of y-axis ticks to show (None = show all)
         annot_font_size: Font size for cell annotations
         colorbar_labelsize: Font size for colorbar tick labels
+        show_annotations: Whether to show annotations on the heatmap
     """
     # Convert torch tensor to DataFrame if needed
     if isinstance(matrix_similarities, torch.Tensor):
@@ -177,25 +179,34 @@ def plot_similarity_measure_matrix(
     print("=" * 50)
 
     # ------------------ ANNOTATION LABELS ------------------
-    annot_labels = matrix_similarities.where(final_annotation_mask).map(
-        lambda x: f"{x:.2f}"
-    )
-    annot_labels = annot_labels.replace("nan", "")
+    if show_annotations:
+        annot_labels = matrix_similarities.where(final_annotation_mask).map(
+            lambda x: f"{x:.2f}"
+        )
+        annot_labels = annot_labels.replace("nan", "")
+    else:
+        annot_labels = None
 
     # ------------------ HEATMAP CREATION ------------------
     heatmap_kwargs = {
         "data": matrix_similarities,
         "fmt": "",  # we already formatted the numbers in annot_labels
         "cmap": "viridis",
-        "annot_kws": {
-            "size": annot_font_size,
-            "weight": "bold",
-        },  # Use parameter for font size
-        "annot": annot_labels,
         "cbar_kws": {
             "pad": 0.01,
         },
     }
+
+    if show_annotations:
+        heatmap_kwargs.update(
+            {
+                "annot": annot_labels,
+                "annot_kws": {
+                    "size": annot_font_size,
+                    "weight": "bold",
+                },  # Use parameter for font size
+            }
+        )
 
     if min_val_global > 0.0:
         heatmap_kwargs["vmax"] = 1
@@ -244,27 +255,28 @@ def plot_similarity_measure_matrix(
     ax.tick_params(axis="both", labelsize=12)
 
     # ------------------ MANUAL CELL ANNOTATION ------------------
-    for i in range(matrix_similarities.shape[0]):
-        for j in range(matrix_similarities.shape[1]):
-            label = annot_labels.iat[i, j]
-            if label:
-                color = (
-                    "red"
-                    if final_red_mask.iat[i, j]
-                    else "darkorange"
-                    if final_orange_mask.iat[i, j]
-                    else "white"
-                )
-                ax.text(
-                    j + 0.5,
-                    i + 0.5,
-                    label,
-                    ha="center",
-                    va="center",
-                    color=color,
-                    fontsize=annot_font_size,  # Use parameter for consistency
-                    weight="bold",
-                )
+    if show_annotations:
+        for i in range(matrix_similarities.shape[0]):
+            for j in range(matrix_similarities.shape[1]):
+                label = annot_labels.iat[i, j]
+                if label:
+                    color = (
+                        "red"
+                        if final_red_mask.iat[i, j]
+                        else "darkorange"
+                        if final_orange_mask.iat[i, j]
+                        else "white"
+                    )
+                    ax.text(
+                        j + 0.5,
+                        i + 0.5,
+                        label,
+                        ha="center",
+                        va="center",
+                        color=color,
+                        fontsize=annot_font_size,  # Use parameter for consistency
+                        weight="bold",
+                    )
 
     # Add background color and style
     ax.set_facecolor("#F8F8F8")
