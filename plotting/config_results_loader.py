@@ -34,7 +34,7 @@ class ResultsLoader:
             - residual_stream_type_pooling dictionary
                 - measure_name, e.g., neighborhood_overlap, linear_cka, svcca
                     - similarity_matrix tensor of shape (num_heads, num_layers) or (num_layers,)
-    - data["transplanting_layers_benchmarking"]
+    - data["transplanting_layers_qa_benchmarking"]
         - dataset
             - experiment_name, e.g.,
                 - sliding_window_ws<ws>_s<s>
@@ -93,8 +93,8 @@ class ResultsLoader:
         # Load all data types
         self.data["model_data_measures"] = self._load_model_data_measures()
         self.data["models_similarities"] = self._load_models_similarities()
-        self.data["transplanting_layers_benchmarking"] = (
-            self._load_transplanting_layers_benchmarking()
+        self.data["transplanting_layers_qa_benchmarking"] = (
+            self._load_transplanting_layers_qa_benchmarking()
         )
         self.data["modalities_similarities"] = self._load_modalities_similarities()
         self.data["transplanting_layers_caption_benchmarking"] = (
@@ -600,21 +600,21 @@ class ResultsLoader:
             print(f"❌ Failed to create model measures difference '{target_model}'")
             return False
 
-    def _load_transplanting_layers_benchmarking(self) -> Dict[str, Any]:
+    def _load_transplanting_layers_qa_benchmarking(self) -> Dict[str, Any]:
         """Load transplantation experiment results."""
-        transplanting_layers_benchmarking = {}
-        transplant_dir = self.results_dir / "transplanting_layers_benchmarking"
+        transplanting_layers_qa_benchmarking = {}
+        transplant_dir = self.results_dir / "transplanting_layers_qa_benchmarking"
 
         if not transplant_dir.exists():
             print("⚠️  No transplanting layers benchmarking results found")
-            return transplanting_layers_benchmarking
+            return transplanting_layers_qa_benchmarking
 
         for dataset in self.config["datasets"]:
             dataset_dir = transplant_dir / dataset
             if not dataset_dir.exists():
                 continue
 
-            transplanting_layers_benchmarking[dataset] = {}
+            transplanting_layers_qa_benchmarking[dataset] = {}
             for file_path in dataset_dir.glob("*.csv"):
                 filename = file_path.stem
 
@@ -626,16 +626,16 @@ class ResultsLoader:
 
                 if "sliding_window" in filename:
                     key = filename.split("sliding_window_")[-1]
-                    transplanting_layers_benchmarking[dataset][
+                    transplanting_layers_qa_benchmarking[dataset][
                         f"sliding_window_{key}"
                     ] = data
                 elif "two_parts" in filename:
                     key = filename.split("two_parts_")[-1]
-                    transplanting_layers_benchmarking[dataset][f"two_parts_{key}"] = (
+                    transplanting_layers_qa_benchmarking[dataset][f"two_parts_{key}"] = (
                         data
                     )
 
-        return transplanting_layers_benchmarking
+        return transplanting_layers_qa_benchmarking
 
     def _load_modalities_similarities(self) -> Dict[str, Any]:
         """Load modalities similarities data from specific datasets."""
@@ -703,13 +703,28 @@ class ResultsLoader:
                 # e.g., "output_layer_sample_cosine_similarity" -> "output_layer", "cosine_similarity"
                 # e.g., "output_layer_sample_homogeneity_score_euclidean" -> "output_layer", "homogeneity_score_euclidean"
                 if "_cosine_similarity" in filename:
+                    if "plain" in filename:
+                        filename = filename.replace("_plain", "")
+                    elif "chat" in filename:
+                        filename = filename.replace("_chat", "")
+
                     stream_type = filename.replace("_sample_cosine_similarity", "")
                     similarity_type = "cosine_similarity"
                 elif "_homogeneity_score_" in filename:
+                    if "plain" in filename:
+                        filename = filename.replace("_plain", "")
+                    elif "chat" in filename:
+                        filename = filename.replace("_chat", "")
+
                     # Extract metric from filename (e.g., "euclidean", "cosine")
                     metric = filename.split("_homogeneity_score_")[-1].replace(
                         ".safetensors", ""
                     )
+                    if "plain" in metric:
+                        metric = metric.replace("_plain", "")
+                    elif "chat" in metric:
+                        metric = metric.replace("_chat", "")
+
                     stream_type = filename.replace(
                         f"_sample_homogeneity_score_{metric}", ""
                     )
@@ -900,7 +915,7 @@ class ResultsLoader:
     def get_transplant(self, dataset: str, experiment: str) -> pd.DataFrame:
         """Get transplantation experiment results."""
         try:
-            return self.data["transplanting_layers_benchmarking"][dataset][experiment]
+            return self.data["transplanting_layers_qa_benchmarking"][dataset][experiment]
         except KeyError:
             raise KeyError(f"Transplant data not found: {dataset}/{experiment}")
 
@@ -1029,9 +1044,9 @@ class ResultsLoader:
                 else:
                     print(f"  {dataset}: {total_configs} configurations")
 
-        if "transplanting_layers_benchmarking" in self.data:
+        if "transplanting_layers_qa_benchmarking" in self.data:
             print("\n🔄 TRANSPLANTATION:")
-            for dataset, exps in self.data["transplanting_layers_benchmarking"].items():
+            for dataset, exps in self.data["transplanting_layers_qa_benchmarking"].items():
                 print(f"  {dataset}: {list(exps.keys())}")
 
         if "modalities_similarities" in self.data:

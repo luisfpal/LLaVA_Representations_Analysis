@@ -660,6 +660,7 @@ def plot_all_model_data_measures(
     ]
 
     for dataset_measure, stream_type, pooling_methods in configs:
+        print(f"🖼️ Plotting {dataset_measure} for {stream_type} with {pooling_methods}")
         template_plot_model_data_measures(
             results_loader=results_loader,
             dataset_measure=dataset_measure,
@@ -730,7 +731,10 @@ def plot_modalities_similarities(
                     similarity_data = safe_tensor_to_numpy(similarity_data)
 
                 # Collect data for Y limits
-                all_data_values.extend(similarity_data)
+                if similarity_data.ndim == 1:
+                    all_data_values.extend(similarity_data)
+                elif similarity_data.ndim == 2:
+                    all_data_values.extend(similarity_data[:, 0])
 
                 # Create line plot
                 layers = range(len(similarity_data))
@@ -738,7 +742,9 @@ def plot_modalities_similarities(
 
                 ax.plot(
                     layers,
-                    similarity_data,
+                    similarity_data
+                    if similarity_data.ndim == 1
+                    else similarity_data[:, 0],
                     color=color,
                     linestyle="-",
                     marker="o",
@@ -746,6 +752,14 @@ def plot_modalities_similarities(
                     linewidth=2,
                     label=model,
                 )
+
+                if similarity_data.ndim == 2:
+                    ax.fill_between(
+                        layers,
+                        similarity_data[:, 0] - similarity_data[:, 1],
+                        similarity_data[:, 0] + similarity_data[:, 1],
+                        alpha=0.25,
+                    )
 
             except KeyError:
                 # Data not available for this combination
@@ -1353,8 +1367,8 @@ def main(save_plots: bool = False):
     # plot_all_output_layer_similarity_measures(results, save_plots=save_plots)
     # plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
     # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
-    plot_all_similarity_measures_matrices(results, save_plots=save_plots)
-    # plot_all_model_data_measures(results, save_plots=save_plots)
+    # plot_all_similarity_measures_matrices(results, save_plots=save_plots)
+    plot_all_model_data_measures(results, save_plots=save_plots)
     # plot_modalities_similarities(
     #     results,
     #     ["output_layer"],

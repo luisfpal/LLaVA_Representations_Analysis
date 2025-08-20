@@ -13,7 +13,7 @@ DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 TRANSPLANTATION_METHOD="sliding_window"
 # TRANSPLANTATION_METHOD="two_parts"
 STRIDE="2"
-WINDOW_SIZE="2"
+WINDOW_SIZE="1"
 
 # --- Benchmarking Parameters ---
 BATCH_SIZE="10"

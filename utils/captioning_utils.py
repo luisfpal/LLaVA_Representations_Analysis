@@ -20,7 +20,7 @@ def generate_captions(
     model: ModelType,
     processor: ProcessorType,
     tokenized_batch: BatchFeature,
-    max_new_tokens: int = 50,
+    max_new_tokens: int = 100,
 ) -> List[str]:
     """Generate captions for a batch of images."""
     _, input_ids_length = tokenized_batch.input_ids.shape[:2]

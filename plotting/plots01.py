@@ -1272,7 +1272,10 @@ def plot_modalities_similarities(
                         similarity_data = safe_tensor_to_numpy(similarity_data)
 
                     # Collect data for Y limits
-                    all_data_values.extend(similarity_data)
+                    if similarity_data.ndim == 1:
+                        all_data_values.extend(similarity_data)
+                    elif similarity_data.ndim == 2:
+                        all_data_values.extend(similarity_data[:, 0])
 
                     # Create line plot with dashed lines and markers for discrete data
                     layers = range(len(similarity_data))
@@ -1282,7 +1285,7 @@ def plot_modalities_similarities(
 
                     ax.plot(
                         layers,
-                        similarity_data,
+                        similarity_data if similarity_data.ndim == 1 else similarity_data[:, 0],
                         color=color,
                         linestyle=linestyle,
                         marker=marker,
@@ -1290,6 +1293,14 @@ def plot_modalities_similarities(
                         linewidth=2,
                         label=f"{model}_{stream_type}",
                     )
+
+                    if similarity_data.ndim == 2:
+                        ax.fill_between(
+                            layers,
+                            similarity_data[:, 0] - similarity_data[:, 1],
+                            similarity_data[:, 0] + similarity_data[:, 1],
+                            alpha=0.25,
+                        )
 
                 except KeyError:
                     # Data not available for this combination

@@ -10,10 +10,10 @@ PRETRAINED_PROJECTOR_NAME_OR_PATH="liuhaotian/llava-v1.5-mlp2x-336px-pretrain-vi
 DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
 # --- Transplantation Configuration ---
-# TRANSPLANTATION_METHOD="sliding_window"
-TRANSPLANTATION_METHOD="two_parts"
+TRANSPLANTATION_METHOD="sliding_window"
+# TRANSPLANTATION_METHOD="two_parts"
 STRIDE="2"
-WINDOW_SIZE="2"
+WINDOW_SIZE="1"
 
 # --- Benchmarking Parameters ---
 BATCH_SIZE="10"

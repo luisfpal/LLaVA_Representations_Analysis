@@ -99,6 +99,7 @@ class ResidualStreamTracer(abc.ABC):
                 "skip_image_pos",
                 "skip_text_pos",
                 "generator",
+                "chat_mode",
             ]
             missing_keys = [
                 key for key in required_keys if key not in self.embeddings_sampling_args

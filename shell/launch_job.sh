@@ -5,10 +5,11 @@ JOB_NAME="experiment"
 PARTITION="DGX"
 GPUS=1
 CPUS=48
-MEM="100GB"
-TIME="01:00:00"
 
-# TIME="03:10:00"
+TIME="01:00:00"
+MEM="100GB"
+
+# TIME="06:00:00"
 # MEM="100GB"
 # MEM="564GB"
 # TIME="06:00:00"
@@ -18,6 +19,8 @@ LOG_DIR="$PROJECT_ROOT/.experiments_logs"
 mkdir -p "$LOG_DIR"
 
 SCRIPT="modalities_similarities.sh"
+# SCRIPT="transplanting_layers_qa_benchmarking.sh"
+# SCRIPT="transplanting_layers_caption_benchmarking.sh"
 
 # ====================== SBATCH Script Creation ====================== #
 SBATCH_SCRIPT=$(mktemp /tmp/sbatch_experiment.XXXXXX.sh)
