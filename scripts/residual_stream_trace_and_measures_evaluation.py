@@ -52,13 +52,22 @@ DATASETS = {
     "cocoqa_txt": {
         "texts_qa": True,
         **COCOQA_DATASET_ARGS,
+        "chat_mode": True,
     },
     "cocoqa_img": {
         "images_qa": True,
         **COCOQA_DATASET_ARGS,
+        "chat_mode": True,  #! check this
     },
     "coco_captioning": {
         "downsample_size": 2500,
+        # use chat mode and captioning prompt
+        # for extracting the residual stream
+        "chat_mode": True,  #! check this
+        "concatenate_captions_and_add_prompt": True,
+        # use plain text and concatenate captions
+        # for extracting the residual stream
+        "concatenate_captions": False,
     },
 }
 
@@ -104,6 +113,13 @@ def parse_list_argument(arg_value: str, valid_values: set) -> List[str]:
         )
 
     return values
+
+
+def check_empty_argument(arg_value: str) -> bool:
+    """
+    Check if an argument is empty.
+    """
+    return arg_value is None or arg_value == ""
 
 
 def validate_combination(residual_stream_type: str, tokens_pooling_method: str) -> bool:
@@ -248,13 +264,19 @@ def main():
     if args.id_nn_range_max <= 0:
         parser.error("id-nn-range-max must be positive")
 
+    # Get similarity measures
+    if not check_empty_argument(args.similarity_measures):
+        similarity_measures = parse_list_argument(
+            args.similarity_measures, SIMILARITY_MEASURES
+        )
+    else:
+        similarity_measures = []
+
     # Set random seed for reproducibility
     seed_all(args.seed)
     results_dir = os.path.expanduser(args.results_dir)
 
-    print(
-        f"🔧 Processing {len(dataset_types)} dataset types: {dataset_types}"
-    )
+    print(f"🔧 Processing {len(dataset_types)} dataset types: {dataset_types}")
     print(
         f"🔧 Processing {len(residual_stream_types)} residual stream types: {residual_stream_types}"
     )
@@ -333,13 +355,13 @@ def main():
                     # this is a minimal overhead since here it doesn't consume much memory nor time
                     # !not so neat but it works for now
                     # todo: redesign the interface if used in the future
-                    
+
                     # Select appropriate dataloader function based on dataset type
                     if dataset_name == "coco_captioning":
                         get_dataloader_func = get_dataloader_for_captioning
                     else:
                         get_dataloader_func = get_dataloader
-                    
+
                     processed_dataloader = get_dataloader_func(
                         **{
                             **dataset_args,
@@ -432,36 +454,37 @@ def main():
                     torch.cuda.empty_cache()
 
                 # Skip similarity computation when pooling method is None
-                if tokens_pooling_method != "none":
-                    # Compute similarity measures between models
-                    print("🤝 Computing similarity measures between models...")
-                    if residual_stream_type == "heads_projection":
-                        compute_residual_stream_similarities = (
-                            compute_heads_projection_residual_stream_similarities
-                        )
-                    else:
-                        compute_residual_stream_similarities = (
-                            compute_layers_residual_stream_similarities
+                if len(similarity_measures) > 0:
+                    if tokens_pooling_method != "none":
+                        # Compute similarity measures between models
+                        print("🤝 Computing similarity measures between models...")
+                        if residual_stream_type == "heads_projection":
+                            compute_residual_stream_similarities = (
+                                compute_heads_projection_residual_stream_similarities
+                            )
+                        else:
+                            compute_residual_stream_similarities = (
+                                compute_layers_residual_stream_similarities
+                            )
+
+                        residual_stream_similarities = (
+                            compute_residual_stream_similarities(
+                                residual_stream_multimodal_model,
+                                residual_stream_multimodal_model_pretrained_connector,
+                                similarity_measures=similarity_measures,
+                                maxk=args.maxk,
+                                accept_rate=args.accept_rate,
+                            )
                         )
 
-                    residual_stream_similarities = compute_residual_stream_similarities(
-                        residual_stream_multimodal_model,
-                        residual_stream_multimodal_model_pretrained_connector,
-                        similarity_measures=parse_list_argument(
-                            args.similarity_measures, SIMILARITY_MEASURES
-                        ),
-                        maxk=args.maxk,
-                        accept_rate=args.accept_rate,
-                    )
-
-                    # Save similarity results
-                    save_file(
-                        residual_stream_similarities,
-                        os.path.join(
-                            similarities_dir,
-                            f"{MODELS_SIMILARITIES_NAME}_{residual_stream_type}_{tokens_pooling_method}.safetensors",
-                        ),
-                    )
+                        # Save similarity results
+                        save_file(
+                            residual_stream_similarities,
+                            os.path.join(
+                                similarities_dir,
+                                f"{MODELS_SIMILARITIES_NAME}_{residual_stream_type}_{tokens_pooling_method}.safetensors",
+                            ),
+                        )
 
                 # Clean up residual streams from memory (only if they were stored)
                 if tokens_pooling_method != "none":

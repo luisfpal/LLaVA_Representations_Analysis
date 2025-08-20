@@ -27,6 +27,7 @@ DATASET_DISPLAY_NAMES = {
 TRANSPLANTATION_DISPLAY_NAMES = {
     "two_parts_s2": "incremental",
     "sliding_window_ws2_s2": "sliding_window",
+    "sliding_window_ws1_s2": "sliding_window",
 }
 
 
@@ -80,11 +81,12 @@ def plot_similarity_measures_matrix(
     bottom_p_percent: float = 0.03,
     max_xticks: Optional[int] = None,
     max_yticks: Optional[int] = None,
-    annot_font_size: int = 8,
-    colorbar_labelsize: int = 14,
+    annot_font_size: int = 10,
+    colorbar_labelsize: int = 12,
     wspace: float = 0.0,
     save_plots: bool = False,
     show_annotations: bool = True,
+    add_title: bool = True,
 ):
     """
     Create side-by-side heatmaps for multiple similarity measures.
@@ -149,6 +151,7 @@ def plot_similarity_measures_matrix(
             annot_font_size=annot_font_size,
             colorbar_labelsize=colorbar_labelsize,
             show_annotations=show_annotations,
+            add_title=add_title,
         )
 
         # Clean up y-axis elements for all columns except the first
@@ -184,16 +187,17 @@ def plot_all_similarity_measures_matrices(
         measures=DEFAULT_MEASURES,
         max_xticks=10,
         max_yticks=10,
-        percentage_threshold=0.08,
-        top_p_percent=0.03,
-        bottom_p_percent=0.03,
-        annot_font_size=8,
-        colorbar_labelsize=14,
+        percentage_threshold=0.05,
+        top_p_percent=0.05,
+        bottom_p_percent=0.05,
+        annot_font_size=7,
+        colorbar_labelsize=12,
         subplot_width=10,
         plot_height=8,
         wspace=-0.05,
         save_plots=save_plots,
         show_annotations=show_annotations,
+        add_title=False,
     )
 
     for dataset in datasets:
@@ -204,7 +208,7 @@ def plot_all_similarity_measures_matrices(
                 pooling=pooling,
             )
 
-    # Plot combined 2x1 matrix for cocoqa_txt and cocoqa_img
+    # Plot combined 1x2 matrix for cocoqa_txt and cocoqa_img
     plot_combined_similarity_matrices(results_loader, save_plots, show_annotations)
 
 
@@ -214,11 +218,20 @@ def plot_combined_similarity_matrices(
     show_annotations: bool = True,
 ):
     """Plot combined 2x1 similarity matrices for cocoqa_txt and cocoqa_img."""
+
+    # Define font sizes for thesis-quality plots
+    FONT_SIZES = {
+        "subtitle": 14,  # Subplot titles
+        "axis_label": 14,  # X and Y axis labels
+        "tick_label": 14,  # Tick labels on axes
+        "annotation": 8,  # Any text annotations
+    }
+
     datasets = ["cocoqa_txt", "cocoqa_img"]
     measure = "neighborhood_overlap"
 
     # Create 2x1 subplot
-    fig, axes = plt.subplots(2, 1, figsize=(10, 16), sharex=True)
+    fig, axes = plt.subplots(1, 2, figsize=(20, 8), sharex=True)
 
     for idx, dataset in enumerate(datasets):
         ax = axes[idx]
@@ -235,7 +248,7 @@ def plot_combined_similarity_matrices(
         plot_similarity_measure_matrix(
             ax=ax,
             matrix_similarities=matrix_similarities,
-            xlabel="Heads" if idx == 1 else "",  # Only bottom subplot gets x-label
+            xlabel="Heads",
             ylabel="Layers",
             measure=measure,
             max_xticks=10,
@@ -248,16 +261,27 @@ def plot_combined_similarity_matrices(
             show_annotations=show_annotations,
         )
 
+        # Fix the fonr sizes of the subplot
+        ax.tick_params(axis="both", labelsize=FONT_SIZES["tick_label"])
+        ax.set_xlabel("Heads", fontsize=FONT_SIZES["axis_label"])
+        ax.set_ylabel("Layers", fontsize=FONT_SIZES["axis_label"])
+
         # Set title for each subplot
         display_name = get_display_name(dataset)
-        ax.set_title(display_name, fontsize=14, fontweight="bold")
+        ax.set_title(display_name, fontsize=FONT_SIZES["subtitle"], fontweight="bold")
 
-        # Remove x-axis elements for top subplot
+        # Remove y-axis elements for right subplot
+        if idx == 1:
+            ax.set_yticklabels([])
+            ax.set_ylabel("")
+            ax.tick_params(left=False)
+
+        # Remove the colorbar for the left subplot
         if idx == 0:
-            ax.set_xticklabels([])
-            ax.set_xlabel("")
+            ax.collections[0].colorbar.remove()
 
     plt.tight_layout()
+    # plt.subplots_adjust(wspace=-0.02)
 
     filename = f"similarity_matrix_combined_{measure}.png"
     save_plot_if_requested(save_plots, filename)
@@ -294,11 +318,18 @@ def template_plot_similarity_measures(
     from matplotlib.colors import TABLEAU_COLORS
     from matplotlib.lines import Line2D
 
+    # Define font sizes for thesis-quality plots
+    FONT_SIZES = {
+        "axis_label": 14,  # X and Y axis labels
+        "tick_label": 14,  # Tick labels on axes
+        "legend": 14,  # Legend text
+    }
+
     # Set style for better plots
     plt.style.use("default")
     hex_colors = list(TABLEAU_COLORS.values())
 
-    height = 8
+    height = 6
     width = 6 * len(measures)
     fig, axes = plt.subplots(
         nrows=1, ncols=len(measures), figsize=(width, height), sharey=True
@@ -342,7 +373,7 @@ def template_plot_similarity_measures(
                     data,
                     color=color,
                     marker="o",
-                    markersize=4,
+                    markersize=5,
                     linewidth=2,
                     linestyle="-",
                 )
@@ -353,15 +384,18 @@ def template_plot_similarity_measures(
         # Configure subplot
         ax.grid(True, alpha=0.3)
 
-        # Configure axis labels
+        # Configure axis labels with proper font sizes
         if m_idx == 0:
-            ax.set_ylabel("Similarity", fontsize=12)
+            ax.set_ylabel("Similarity", fontsize=FONT_SIZES["axis_label"])
         else:
             # Remove Y-axis elements for non-first subplots
             ax.tick_params(left=False)
             ax.set_ylabel("")  # Set an empty string as ylabel
 
-        ax.set_xlabel("Layer", fontsize=12)
+        ax.set_xlabel("Layer", fontsize=FONT_SIZES["axis_label"])
+
+        # Configure tick labels
+        ax.tick_params(axis="both", labelsize=FONT_SIZES["tick_label"])
 
     # Set Y limits: min = 0 or minimum data value, max = 1
     if min_all_data_values:
@@ -382,11 +416,12 @@ def template_plot_similarity_measures(
             Line2D([0], [0], color=color, linewidth=3, label=display_name)
         )
 
-    # Add dataset legend
-    first_ax.legend(
+    # Add dataset legend with proper font sizes
+    legend = first_ax.legend(
         handles=dataset_legend_elements,
         loc="upper left",
-        fontsize=10,
+        fontsize=FONT_SIZES["legend"],
+        title_fontsize=FONT_SIZES["legend_title"],
         frameon=True,
         fancybox=True,
         shadow=True,
@@ -485,6 +520,14 @@ def template_plot_model_data_measures(
     from matplotlib.colors import TABLEAU_COLORS
     from matplotlib.lines import Line2D
 
+    # Define font sizes for thesis-quality plots
+    FONT_SIZES = {
+        "subtitle": 14,  # Subplot titles
+        "axis_label": 14,  # X and Y axis labels
+        "tick_label": 14,  # Tick labels on axes
+        "legend": 14,  # Legend text
+    }
+
     # Set style for better plots
     plt.style.use("default")
     hex_colors = list(TABLEAU_COLORS.values())
@@ -505,8 +548,8 @@ def template_plot_model_data_measures(
     all_models = sorted(list(all_models))
 
     # Create subplots: 1 row, num_models columns
-    height = 8
-    width = 6 * len(all_models)
+    height = 6
+    width = 5 * len(all_models)
     fig, axes = plt.subplots(
         nrows=1, ncols=len(all_models), figsize=(width, height), sharey=True
     )
@@ -592,18 +635,24 @@ def template_plot_model_data_measures(
                 )
 
         # Configure subplot
-        ax.set_title(f"{model}", fontsize=14)
+        ax.set_title(f"{model}", fontsize=FONT_SIZES["subtitle"])
         ax.grid(True, alpha=0.3)
 
         # Configure axis labels
         if m_idx == 0:
-            ax.set_ylabel(f"{dataset_measure.replace('_', ' ').title()}", fontsize=12)
+            ax.set_ylabel(
+                f"{dataset_measure.replace('_', ' ').title()}",
+                fontsize=FONT_SIZES["axis_label"],
+            )
         else:
             # Remove Y-axis elements for non-first subplots
             ax.tick_params(left=False)
             ax.set_ylabel("")
 
-        ax.set_xlabel("Layer", fontsize=12)
+        ax.set_xlabel("Layer", fontsize=FONT_SIZES["axis_label"])
+
+        # Configure tick labels
+        ax.tick_params(axis="both", labelsize=FONT_SIZES["tick_label"])
 
     # Set Y limits based on all data
     if all_data_values:
@@ -633,7 +682,7 @@ def template_plot_model_data_measures(
         # Add dataset legend
         first_ax.legend(
             handles=dataset_legend_elements,
-            fontsize=10,
+            fontsize=FONT_SIZES["legend"],
             frameon=True,
             fancybox=True,
             shadow=True,
@@ -687,6 +736,14 @@ def plot_modalities_similarities(
     """
     print(f"\n📊 Plotting modalities similarities: {similarity_type}")
 
+    # Define font sizes for thesis-quality plots
+    FONT_SIZES = {
+        "subtitle": 14,  # Subplot titles
+        "axis_label": 14,  # X and Y axis labels
+        "tick_label": 14,  # Tick labels on axes
+        "legend": 14,  # Legend text
+    }
+
     if "modalities_similarities" not in results_loader.data:
         print("⚠️  No modalities similarities data loaded")
         return
@@ -705,10 +762,10 @@ def plot_modalities_similarities(
 
     # Create subplots based on number of datasets
     if len(all_datasets) == 1:
-        fig, ax = plt.subplots(1, 1, figsize=(6, 8))
+        fig, ax = plt.subplots(1, 1, figsize=(6, 6))
         axes = [ax]
     else:
-        fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6), sharey=True)
 
     # Define colors for models
     model_colors = {"finetuned": "blue", "pretrained": "red"}
@@ -759,6 +816,7 @@ def plot_modalities_similarities(
                         similarity_data[:, 0] - similarity_data[:, 1],
                         similarity_data[:, 0] + similarity_data[:, 1],
                         alpha=0.25,
+                        color=color,
                     )
 
             except KeyError:
@@ -767,8 +825,8 @@ def plot_modalities_similarities(
 
         # Configure subplot
         display_name = get_display_name(dataset)
-        ax.set_title(display_name, fontsize=14, fontweight="bold")
-        ax.set_xlabel("Layer", fontsize=12)
+        ax.set_title(display_name, fontsize=FONT_SIZES["subtitle"], fontweight="bold")
+        ax.set_xlabel("Layer", fontsize=FONT_SIZES["axis_label"])
         if d_idx == 0:  # Only first subplot gets y-label
             if similarity_type == "cosine_similarity":
                 y_label = "Cosine Similarity"
@@ -776,13 +834,16 @@ def plot_modalities_similarities(
                 y_label = "Homogeneity Score"
             else:
                 y_label = "Similarity"
-            ax.set_ylabel(y_label, fontsize=12)
+            ax.set_ylabel(y_label, fontsize=FONT_SIZES["axis_label"])
         else:
             # Remove Y-axis elements for non-first subplots
             ax.tick_params(left=False)
             ax.set_ylabel("")
 
         ax.grid(True, alpha=0.3)
+
+        # Configure tick labels
+        ax.tick_params(axis="both", labelsize=FONT_SIZES["tick_label"])
 
     # Set Y limits based on collected data
     if all_data_values:
@@ -828,7 +889,7 @@ def plot_modalities_similarities(
         # Add model legend
         first_ax.legend(
             handles=model_legend_elements,
-            fontsize=10,
+            fontsize=FONT_SIZES["legend"],
             frameon=True,
             fancybox=True,
             shadow=True,
@@ -842,7 +903,7 @@ def plot_modalities_similarities(
     save_plot_if_requested(save_plots, filename)
 
 
-def plot_transplanting_layers_benchmarking(
+def plot_transplanting_layers_qa_benchmarking(
     results_loader: ResultsLoader,
     transplantation_method: str,
     save_plots: bool = False,
@@ -855,18 +916,27 @@ def plot_transplanting_layers_benchmarking(
         transplantation_method: Either 'sliding_window_ws2_s2' or 'two_parts_s2'
     """
 
+    # Define font sizes for thesis-quality plots
+    FONT_SIZES = {
+        "subtitle": 14,  # Subplot titles
+        "axis_label": 14,  # X and Y axis labels
+        "tick_label": 14,  # Tick labels on axes
+        "legend": 14,  # Legend text
+        "annotation": 10,  # Any text annotations
+    }
+
     # Load transplanting data for both datasets
     datasets = ["cocoqa_txt", "cocoqa_img"]
 
     # Validate transplantation method
-    if "transplanting_layers_benchmarking" not in results_loader.data:
+    if "transplanting_layers_qa_benchmarking" not in results_loader.data:
         print("⚠️  No transplanting layers benchmarking data loaded")
         return
 
     print(f"\n📊 Plotting transplanting layers benchmarking: {transplantation_method}")
 
     # Create figure with 1x2 subplots (shared y-axis)
-    fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 8), sharey=True)
 
     # Process each dataset
     for idx, dataset in enumerate(datasets):
@@ -930,15 +1000,22 @@ def plot_transplanting_layers_benchmarking(
 
             # Customize subplot
             display_name = get_display_name(dataset)
-            ax.set_xlabel("Layer Number / Model Type", fontsize=12)
+            ax.set_xlabel(
+                "Layer Number / Model Type", fontsize=FONT_SIZES["axis_label"]
+            )
             if idx == 0:  # Only first subplot gets y-label
-                ax.set_ylabel("Accuracy", fontsize=12)
+                ax.set_ylabel("Accuracy", fontsize=FONT_SIZES["axis_label"])
 
-            ax.set_title(display_name, fontsize=14, fontweight="bold")
+            ax.set_title(
+                display_name, fontsize=FONT_SIZES["subtitle"], fontweight="bold"
+            )
             ax.set_xticks(x_positions)
             ax.set_xticklabels(x_labels, rotation=45 if len(x_labels) > 10 else 0)
             ax.set_ylim(0, 1)
             ax.grid(True, alpha=0.3, axis="y")
+
+            # Configure tick labels
+            ax.tick_params(axis="both", labelsize=FONT_SIZES["tick_label"])
 
             # Add value labels on top of bars
             for i, (pos, acc) in enumerate(zip(x_positions, all_accuracies)):
@@ -948,7 +1025,7 @@ def plot_transplanting_layers_benchmarking(
                     f"{acc:.2f}",
                     ha="center",
                     va="bottom",
-                    fontsize=9,
+                    fontsize=FONT_SIZES["annotation"],
                 )
 
         except Exception as e:
@@ -963,7 +1040,9 @@ def plot_transplanting_layers_benchmarking(
                 fontsize=14,
                 color="red",
             )
-            ax.set_title(display_name, fontsize=14, fontweight="bold")
+            ax.set_title(
+                display_name, fontsize=FONT_SIZES["subtitle"], fontweight="bold"
+            )
 
     # Add legend
     from matplotlib.patches import Patch
@@ -976,9 +1055,9 @@ def plot_transplanting_layers_benchmarking(
     fig.legend(
         handles=legend_elements,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.93),
+        bbox_to_anchor=(0.5, 0.95),
         ncol=3,
-        fontsize=11,
+        fontsize=FONT_SIZES["legend"],
     )
 
     # Remove Y-axis elements for non-first subplots
@@ -988,11 +1067,11 @@ def plot_transplanting_layers_benchmarking(
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)  # Make room for legend
 
-    filename = f"transplanting_layers_benchmarking_{transplantation_method}.png"
+    filename = f"transplanting_layers_qa_benchmarking_{transplantation_method}.png"
     save_plot_if_requested(save_plots, filename)
 
 
-def plot_all_transplanting_layers_benchmarking(
+def plot_all_transplanting_layers_qa_benchmarking(
     results_loader: ResultsLoader, save_plots: bool = False
 ):
     """
@@ -1001,10 +1080,14 @@ def plot_all_transplanting_layers_benchmarking(
     print("\n📊 Plotting all transplanting layers benchmarking experiments...")
 
     # Available transplantation methods
-    methods = ["sliding_window_ws2_s2", "two_parts_s2"]
+    methods = [
+        "two_parts_s2",
+        "sliding_window_ws2_s2",
+        "sliding_window_ws1_s2",
+    ]
 
     for method in methods:
-        plot_transplanting_layers_benchmarking(
+        plot_transplanting_layers_qa_benchmarking(
             results_loader, method, save_plots=save_plots
         )
 
@@ -1111,6 +1194,16 @@ def plot_caption_benchmarking_for_directory(
         directory_name: Directory name (e.g., 'transplanting_layers_caption_benchmarking')
         save_plots: Whether to save plots instead of showing them
     """
+
+    # Define font sizes for thesis-quality plots
+    FONT_SIZES = {
+        "subtitle": 14,  # Subplot titles
+        "axis_label": 14,  # X and Y axis labels
+        "tick_label": 14,  # Tick labels on axes
+        "legend": 14,  # Legend text
+        "annotation": 10,  # Any text annotations
+    }
+
     if "transplanting_layers_caption_benchmarking" not in results_loader.data:
         print("⚠️  No transplanting layers caption benchmarking data loaded")
         return
@@ -1118,11 +1211,15 @@ def plot_caption_benchmarking_for_directory(
     print(f"\n📊 Plotting caption benchmarking: {metric_name} from {directory_name}")
 
     # Available transplantation methods
-    transplantation_methods = ["two_parts_s2", "sliding_window_ws2_s2"]
+    transplantation_methods = [
+        "two_parts_s2",
+        # "sliding_window_ws2_s2",
+        "sliding_window_ws1_s2",
+    ]
     dataset_name = "coco_captioning"
 
     # Create figure with 1x2 subplots (shared y-axis)
-    fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 8), sharey=True)
 
     # Collect all metric values to determine Y limits
     all_metric_values = []
@@ -1163,16 +1260,23 @@ def plot_caption_benchmarking_for_directory(
                     bar.set_color("lightcoral")
 
             # Customize subplot
-            ax.set_xlabel("Layer Number / Model Type", fontsize=12)
+            ax.set_xlabel(
+                "Layer Number / Model Type", fontsize=FONT_SIZES["axis_label"]
+            )
             if idx == 0:  # Only first subplot gets y-label
-                ax.set_ylabel(metric_name, fontsize=12)
+                ax.set_ylabel(metric_name, fontsize=FONT_SIZES["axis_label"])
 
             # Use display names for titles
             display_name = TRANSPLANTATION_DISPLAY_NAMES.get(method, method)
-            ax.set_title(display_name, fontsize=14, fontweight="bold")
+            ax.set_title(
+                display_name, fontsize=FONT_SIZES["subtitle"], fontweight="bold"
+            )
             ax.set_xticks(x_positions)
             ax.set_xticklabels(x_labels, rotation=45 if len(x_labels) > 10 else 0)
             ax.grid(True, alpha=0.3, axis="y")
+
+            # Configure tick labels
+            ax.tick_params(axis="both", labelsize=FONT_SIZES["tick_label"])
 
             # Add value labels on top of bars
             for i, (pos, val) in enumerate(zip(x_positions, all_metrics)):
@@ -1188,7 +1292,7 @@ def plot_caption_benchmarking_for_directory(
                     display_val,
                     ha="center",
                     va="bottom",
-                    fontsize=9,
+                    fontsize=FONT_SIZES["annotation"],
                 )
 
         except Exception as e:
@@ -1229,9 +1333,9 @@ def plot_caption_benchmarking_for_directory(
     fig.legend(
         handles=legend_elements,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.93),
+        bbox_to_anchor=(0.5, 0.95),
         ncol=3,
-        fontsize=11,
+        fontsize=FONT_SIZES["legend"],
     )
 
     # Remove Y-axis elements for non-first subplots
@@ -1300,7 +1404,11 @@ def plot_all_transplanting_layers_caption_benchmarking(
     _print_caption_benchmarking_summary(results_loader)
 
     # Available metrics - plot each metric separately
-    metrics = ["CIDEr", "CLIP-S", "RefCLIP-S"]
+    metrics = [
+        "CIDEr",
+        "CLIP-S",
+        # "RefCLIP-S",
+    ]
 
     # Available directories from config
     caption_directories = results_loader.config.get("caption_benchmarking", {}).get(
@@ -1368,20 +1476,20 @@ def main(save_plots: bool = False):
     # plot_all_post_mlp_similarity_measures(results, save_plots=save_plots)
     # plot_all_mean_heads_projection_similarity_measures(results, save_plots=save_plots)
     # plot_all_similarity_measures_matrices(results, save_plots=save_plots)
-    plot_all_model_data_measures(results, save_plots=save_plots)
-    # plot_modalities_similarities(
-    #     results,
-    #     ["output_layer"],
-    #     "cosine_similarity",
-    #     save_plots=save_plots,
-    # )
-    # plot_modalities_similarities(
-    #     results,
-    #     ["output_layer"],
-    #     "homogeneity_score_cosine",
-    #     save_plots=save_plots,
-    # )
-    # plot_all_transplanting_layers_benchmarking(results, save_plots=save_plots)
+    # plot_all_model_data_measures(results, save_plots=save_plots)
+    plot_modalities_similarities(
+        results,
+        ["output_layer"],
+        "cosine_similarity",
+        save_plots=save_plots,
+    )
+    plot_modalities_similarities(
+        results,
+        ["output_layer"],
+        "homogeneity_score_cosine",
+        save_plots=save_plots,
+    )
+    # plot_all_transplanting_layers_qa_benchmarking(results, save_plots=save_plots)
     # plot_all_transplanting_layers_caption_benchmarking(results, save_plots=save_plots)
 
 

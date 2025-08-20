@@ -21,6 +21,7 @@ def plot_similarity_measure_matrix(
     annot_font_size: int = 8,
     colorbar_labelsize: int = 12,
     show_annotations: bool = True,
+    add_title: bool = True,
 ) -> None:
     """
     Create a similarity measure heatmap on a provided matplotlib axis.
@@ -219,7 +220,8 @@ def plot_similarity_measure_matrix(
     colorbar.ax.tick_params(labelsize=colorbar_labelsize)
 
     # Set titles and labels
-    ax.set_title(f"{title} [{measure}]" if title else f"[{measure}]", fontsize=16)
+    if add_title:
+        ax.set_title(f"{title} [{measure}]" if title else f"[{measure}]", fontsize=16)
     ax.set_xlabel(xlabel, fontsize=14)
     ax.set_ylabel(ylabel, fontsize=14)
 
