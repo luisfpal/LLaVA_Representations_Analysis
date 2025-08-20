@@ -3,7 +3,6 @@
 # File paths - support multiple results directories
 paths:
   results: "../results"
-  results_coco_captioning: "../results_coco_captioning"
 
 # Model name mappings
 models:
