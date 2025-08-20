@@ -10,6 +10,7 @@ def sample_image_and_text_positions(
     skip_text_pos: bool = False,
     generator: torch.Generator = None,
     subtract_padding_per_sample: bool = True,
+    chat_mode: bool = False,
 ) -> torch.Tensor:
     """
     Sample image and text positions (indices) from input_ids tensor.
@@ -27,7 +28,8 @@ def sample_image_and_text_positions(
                                     This is useful for the residual stream tracer.
                                    If False, use original positions (batch-wide consideration).
                                    Not necessary if not working with the residual stream tracer.
-        
+        chat_mode: If True, the inputs contain the ASSISTANT token embeddings at the end of the sequence.
+                    Thus, they are removed from the sampling process.
     Returns:
         Tensor of sampled positions:
         - If both image and text: shape (batch_size, 2) with [image_pos, text_pos]
@@ -43,6 +45,14 @@ def sample_image_and_text_positions(
         raise ValueError("Cannot skip both image and text positions")
 
     device = input_ids.device
+    
+    # Remove the assistant tokens from the input_ids if they are present
+    # when the input modalities are image-text
+    if chat_mode and skip_image_pos:
+        # ~7-10 tokens for: ASSISTANT: Answer:
+        approximate_max_observed_assistant_tokens_length = 10
+        input_ids = input_ids[:, :-approximate_max_observed_assistant_tokens_length]
+    
     batch_size, seq_length = input_ids.shape
 
     # Create generator on the correct device if not provided
@@ -66,7 +76,8 @@ def sample_image_and_text_positions(
     
     # Validate image positions
     if (image_end > seq_length).any():
-        raise ValueError("Image sequence extends beyond sequence length")
+        sampled_image_end = image_end[image_end > seq_length][0]
+        raise ValueError(f"Image sequence extends beyond sequence length: {sampled_image_end} > {seq_length}")
 
     # Sample image positions
     if not skip_image_pos:
@@ -89,12 +100,24 @@ def sample_image_and_text_positions(
         
         # Create valid text mask (exclude padding tokens)
         valid_text_mask = input_ids != pad_token_id  # (batch_size, seq_length)
+        
+        # !specific to the experiments I am running
+        # and modifies the image_end variable when it is no longer used for sampling the image positions
+        if chat_mode:
+            # ~38-40 tokens for:
+            # f"Below are {len(captions)} numbered descriptions of the image.
+            # Please generate an additional description of the image.
+            # The caption should be a single sentence, not multiple sentences!!!\n\n"
+            approximate_max_observed_captions_tokens_length = 40
+            image_end += approximate_max_observed_captions_tokens_length
 
         # Create directional mask based on text_direction
-        if text_direction == "left":
-            directional_mask = position_indices < image_start.unsqueeze(1)  # (batch_size, seq_length)
-        else:  # right
+        if text_direction == "right":
             directional_mask = position_indices >= image_end.unsqueeze(1)  # (batch_size, seq_length)
+        elif text_direction == "left":
+            directional_mask = position_indices < image_start.unsqueeze(1)  # (batch_size, seq_length)
+        else:
+            raise ValueError(f"Invalid text_direction: {text_direction}. Must be 'left' or 'right'.")
 
         # Combine masks to get candidate positions
         candidate_mask = valid_text_mask & directional_mask  # (batch_size, seq_length)

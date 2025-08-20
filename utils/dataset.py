@@ -356,10 +356,12 @@ class ImageCaptioningDataset(Dataset):
         dataset_path_or_name: str,
         downsample_size: Optional[int] = None,
         seed: int = 42,
+        concatenate_captions_and_add_prompt: bool = False,
         concatenate_captions: bool = False,
     ):
         dataset_dir = os.path.expanduser(dataset_path_or_name)
-        self.concatenate_captions = concatenate_captions
+        self.concatenate_captions_and_add_prompt = concatenate_captions_and_add_prompt
+        self.concatenate_captions = concatenate_captions    
 
         if not os.path.exists(dataset_dir):
             raise FileNotFoundError(f"Dataset directory not found: {dataset_dir}")
@@ -386,10 +388,12 @@ class ImageCaptioningDataset(Dataset):
         data = self.dataset[idx]
         captions = data["captions"]
         prompt = ""
-        if self.concatenate_captions:
+        if self.concatenate_captions_and_add_prompt:
             prompt = f"Below are {len(captions)} numbered descriptions of the image. Please generate an additional description of the image. The caption should be a single sentence, not multiple sentences!!!\n\n"
             for idx, caption in zip(range(len(captions)), captions):
                 prompt += f"{idx + 1}: {caption}\n"
+        elif self.concatenate_captions:
+            prompt = " ".join(captions)
         else:
             prompt = SHORT_CAPTION_PROMPT
 
@@ -440,7 +444,8 @@ def format_prompts(
     elif args.chat_mode and not chat_template_exists:
         # for simplicity I use these parameters for the custom prompt
         return _format_as_custom_prompts_text_image(questions, images, args)
-
+    elif not args.chat_mode:
+        return _format_as_plain_prompts_forward_pass(questions, images, args.image_first)
     else:
         return _format_as_plain_prompts(questions, images)
 
@@ -508,6 +513,17 @@ def _format_as_custom_prompts_text_image(questions, images, args):
     return formatted_prompts
 
 
+def _format_as_plain_prompts_forward_pass(questions, images, image_first: bool = True):
+    formatted_prompts = []
+    for image, question_text in zip(images, questions):
+        image_text = "<image>" if image is not None else ""
+        if image_first:
+            prompt = f"{image_text} {question_text}"
+        else:
+            prompt = f"{question_text} {image_text}"
+        formatted_prompts.append(prompt)
+    return formatted_prompts
+
 # todo: check if this should be removed
 # its functionality was absorbed in the get_dataloader function
 def preprocess_batch(
@@ -552,6 +568,7 @@ def collate_vqa_batch(
     guide_text,
     answer_letters_with_processed_batch,
     chat_template_exists=True,
+    chat_mode=True,
 ):
     # Custom collate function to handle images and text
     questions = [item["question"] for item in batch]
@@ -564,7 +581,7 @@ def collate_vqa_batch(
         # For simplicity, define args for backward code compatibility
         # todo: redesign the interface if used in the future
         args = argparse.Namespace(
-            chat_mode=True,
+            chat_mode=chat_mode,
             continue_final_message=True,
             guide_text=guide_text,
             # !"enforced" but consistent for these experiments
@@ -612,6 +629,8 @@ def collate_captioning_batch(
     return_captions=False,
     return_image_ids=False,
     return_images=False,
+    chat_mode=True,
+    image_first=True,
 ):
     # Sanity check
     if return_image_ids and not return_captions:
@@ -629,9 +648,10 @@ def collate_captioning_batch(
         # For simplicity, define args for backward code compatibility
         # todo: redesign the interface if used in the future
         args = argparse.Namespace(
-            chat_mode=True,
+            chat_mode=chat_mode,
             continue_final_message=True,
             # !"enforced" but consistent for these experiments
+            image_first=image_first,
         )
 
         prompts = format_prompts(
@@ -774,12 +794,16 @@ def get_dataloader_for_captioning(
     return_captions: bool = False,
     return_image_ids: bool = False,
     return_images: bool = False,
+    concatenate_captions_and_add_prompt: bool = False,
     concatenate_captions: bool = False,
+    chat_mode: bool = True,
+    image_first: bool = True,
 ):
     dataset = ImageCaptioningDataset(
         dataset_path_or_name=dataset_path_or_name,
         downsample_size=downsample_size,
         seed=seed,
+        concatenate_captions_and_add_prompt=concatenate_captions_and_add_prompt,
         concatenate_captions=concatenate_captions,
     )
 
@@ -790,6 +814,8 @@ def get_dataloader_for_captioning(
         return_captions=return_captions,
         return_image_ids=return_image_ids,
         return_images=return_images,
+        chat_mode=chat_mode,
+        image_first=image_first,
     )
 
     return DataLoader(

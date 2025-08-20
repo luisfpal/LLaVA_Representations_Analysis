@@ -13,7 +13,10 @@ SYSTEM_ROLE = {
 ASSISTANT_ROLE = {
     "role": "assistant",
     "content": [
-        {"type": "text", "text": "Answer:"},
+        {
+            "type": "text",
+            "text": "Answer:",
+        },
     ],
 }
 SQA_ANSWER_CHOICES = ["A", "B", "C", "D", "E"]

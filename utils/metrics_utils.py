@@ -948,8 +948,57 @@ def compute_heads_projection_residual_stream_similarities(
     return residual_stream_measures
 
 
+@torch.no_grad()
+def bootstrap_median_from_cos(
+    cos: torch.Tensor, n_boot: int = 1000, sample_size: int = None, seed: int = 42
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Bootstrap the per-layer median using only the (layers, samples) cosine matrix.
+
+    Parameters
+    ----------
+    cos : (L, N)
+    n_boot : number of bootstrap replicates
+    sample_size : m in m-out-of-n bootstrap (defaults to N for classic bootstrap)
+    seed : RNG seed
+
+    Returns
+    -------
+    mean_of_medians : (L,)
+    std_of_medians  : (L,)
+    """
+    if cos.ndim != 2:
+        raise ValueError("cos must be 2D: (layers, samples)")
+
+    L, N = cos.shape
+    device = cos.device
+    sample_size = N if sample_size is None else sample_size
+
+    g = torch.Generator(device=device)
+    g.manual_seed(seed)
+
+    # (B, sample_size)
+    idx = torch.randint(
+        low=0, high=N, size=(n_boot, sample_size), generator=g, device=device
+    )
+    # Broadcast to (B, L, sample_size) and gather from (L, N):
+    cos_expanded = cos.unsqueeze(0).expand(n_boot, L, N)  # (B, L, N)
+    idx_expanded = idx.unsqueeze(1).expand(n_boot, L, sample_size)  # (B, L, S)
+    sampled = torch.gather(cos_expanded, dim=2, index=idx_expanded)  # (B, L, S)
+
+    boot_medians = sampled.median(dim=2).values  # (B, L)
+
+    mean_of_medians = boot_medians.mean(dim=0)  # (L,)
+    std_of_medians = boot_medians.std(dim=0, unbiased=True)  # (L,)
+
+    return torch.stack([mean_of_medians, std_of_medians], dim=1)  # (L, 2)
+
+@torch.no_grad()
 def compute_layers_cosine_similarity(
-    tensor1: torch.Tensor, tensor2: torch.Tensor
+    tensor1: torch.Tensor,
+    tensor2: torch.Tensor,
+    bootstrap: bool = False,
+    n_boot: int = 1000,
 ) -> torch.Tensor:
     """
     Compute cosine similarity between two tensors across layers and return median similarity per layer.
@@ -957,9 +1006,14 @@ def compute_layers_cosine_similarity(
     Args:
         tensor1: First tensor of shape (layers, samples, hidden_dim)
         tensor2: Second tensor of shape (layers, samples, hidden_dim)
+        bootstrap: Whether to bootstrap the median similarity per layer
+        n_boot: Number of bootstrap replicates
 
     Returns:
-        Tensor of shape (layers,) containing median cosine similarity for each layer
+        If bootstrap is False:
+            Tensor of shape (layers,) containing median cosine similarity for each layer
+        If bootstrap is True:
+            Tensor of shape (layers, 2) containing the mean and std of the median cosine similarity for each layer
     """
     # Validate input shapes
     if tensor1.shape != tensor2.shape:
@@ -976,9 +1030,10 @@ def compute_layers_cosine_similarity(
 
     # Compute median across samples for each layer
     # Shape: (layers,)
-    median_similarities = torch.median(cosine_similarities, dim=1).values
-
-    return median_similarities
+    if bootstrap:
+        return bootstrap_median_from_cos(cosine_similarities, n_boot=n_boot)
+    else:
+        return torch.median(cosine_similarities, dim=1).values
 
 
 def compute_layers_homogeneity_score(

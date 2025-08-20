@@ -703,13 +703,28 @@ class ResultsLoader:
                 # e.g., "output_layer_sample_cosine_similarity" -> "output_layer", "cosine_similarity"
                 # e.g., "output_layer_sample_homogeneity_score_euclidean" -> "output_layer", "homogeneity_score_euclidean"
                 if "_cosine_similarity" in filename:
+                    if "plain" in filename:
+                        filename = filename.replace("_plain", "")
+                    elif "chat" in filename:
+                        filename = filename.replace("_chat", "")
+
                     stream_type = filename.replace("_sample_cosine_similarity", "")
                     similarity_type = "cosine_similarity"
                 elif "_homogeneity_score_" in filename:
+                    if "plain" in filename:
+                        filename = filename.replace("_plain", "")
+                    elif "chat" in filename:
+                        filename = filename.replace("_chat", "")
+
                     # Extract metric from filename (e.g., "euclidean", "cosine")
                     metric = filename.split("_homogeneity_score_")[-1].replace(
                         ".safetensors", ""
                     )
+                    if "plain" in metric:
+                        metric = metric.replace("_plain", "")
+                    elif "chat" in metric:
+                        metric = metric.replace("_chat", "")
+
                     stream_type = filename.replace(
                         f"_sample_homogeneity_score_{metric}", ""
                     )

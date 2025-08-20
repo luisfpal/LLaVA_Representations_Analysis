@@ -24,7 +24,7 @@ SEED="42"
 
 # Directory configuration
 PROJECT_DIR="$HOME/multimodal_finetuned_representations"
-RESULTS_DIR="$PROJECT_DIR/results_coco_captioning"
+RESULTS_DIR="$PROJECT_DIR/results"
 MODEL_CACHE_DIR="$HOME/scratch/huggingface/hub"
 
 # Script configuration

@@ -32,12 +32,21 @@ DATASETS_TYPES = {
         "images_qa": True,
         "guide_text": "Answer the question using a single word or phrase.\n",
         "downsample_size": 2500,
+        "chat_mode": True,
     },
     "coco_captioning": {
         "downsample_size": 2500,
-        "concatenate_captions": True,
+        # use chat mode and captioning prompt
+        # for extracting the residual stream
+        "chat_mode": True,
+        "concatenate_captions_and_add_prompt": True,
+        # use plain text and concatenate captions
+        # for extracting the residual stream
+        "concatenate_captions": False,
     },
 }
+
+SUFFIX = "chat"
 
 MODELS = {
     "multimodal_model": {
@@ -165,6 +174,8 @@ def main():
     parser.add_argument("--range-max", type=int, default=128)
     parser.add_argument("--k", type=int, default=16)
     parser.add_argument("--Z", type=float, default=1.65)
+    parser.add_argument("--bootstrap", type=bool, default=False)
+    parser.add_argument("--n-boot", type=int, default=1000)
 
     # Analysis configuration
     parser.add_argument(
@@ -269,8 +280,9 @@ def main():
                 residual_stream_text_embeddings = None
                 residual_stream_image_embeddings = None
 
-                for chat_template_exists in [True, False]:
-                    if chat_template_exists:
+                chat_mode = dataset_config["chat_mode"]
+                for binary_flag in [True, False]:
+                    if binary_flag:
                         print(
                             "\n*****🔤 Residual stream with random text positions*****"
                         )
@@ -279,7 +291,11 @@ def main():
                             "\n*****🖼️ Residual stream with random image positions*****"
                         )
 
-                    dataloader_kwargs["chat_template_exists"] = chat_template_exists
+                    if chat_mode:
+                        dataloader_kwargs["chat_template_exists"] = binary_flag
+                    else:
+                        dataloader_kwargs["image_first"] = binary_flag
+
                     processed_dataloader = get_dataloader_func(
                         **dataset_config,
                         **dataloader_kwargs,
@@ -292,10 +308,11 @@ def main():
 
                     embeddings_sampling_args = {
                         **embeddings_sampling_args,
-                        "text_direction": "right",  # only effective for chat_template_exists=True
-                        "skip_image_pos": chat_template_exists,
-                        "skip_text_pos": not chat_template_exists,
+                        "text_direction": "right",  # only effective for chat_mode=True
+                        "skip_image_pos": binary_flag,
+                        "skip_text_pos": not binary_flag,
                         "generator": generator,
+                        "chat_mode": chat_mode,
                     }
 
                     # Extract residual stream
@@ -307,7 +324,7 @@ def main():
                         return_deepcopy=True,
                         embeddings_sampling_args=embeddings_sampling_args,
                     )
-                    if chat_template_exists:
+                    if binary_flag:
                         residual_stream_text_embeddings = residual_stream
                     else:
                         residual_stream_image_embeddings = residual_stream
@@ -322,15 +339,17 @@ def main():
                 layers_cosine_similarity = compute_layers_cosine_similarity(
                     residual_stream_text_embeddings,
                     residual_stream_image_embeddings,
+                    bootstrap=args.bootstrap,
+                    n_boot=args.n_boot,
                 )
                 save_file(
                     {"layers_cosine_similarity": layers_cosine_similarity},
                     os.path.join(
                         modalities_similarity_dir,
-                        f"{residual_stream_type}_sample_cosine_similarity.safetensors",
+                        f"{residual_stream_type}_sample_cosine_similarity_{SUFFIX}.safetensors",
                     ),
                 )
-                for metric in ["euclidean", "cosine"]:
+                for metric in ["cosine"]:
                     layers_homogeneity_scores = compute_layers_homogeneity_score(
                         residual_stream_text_embeddings,
                         residual_stream_image_embeddings,
@@ -344,7 +363,7 @@ def main():
                         {"layers_homogeneity_scores": layers_homogeneity_scores},
                         os.path.join(
                             modalities_similarity_dir,
-                            f"{residual_stream_type}_sample_homogeneity_score_{metric}.safetensors",
+                            f"{residual_stream_type}_sample_homogeneity_score_{metric}_{SUFFIX}.safetensors",
                         ),
                     )
                 # Clean up model from memory

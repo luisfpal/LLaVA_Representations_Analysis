@@ -5,12 +5,14 @@
 DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
 # Analysis configuration
-RESIDUAL_STREAM_TYPES="output_layer,post_mlp"
+RESIDUAL_STREAM_TYPES="output_layer"
 DATASET_TYPE="coco_captioning"
 
 # Processing parameters
 BATCH_SIZE="16"
 SEED="42"
+BOOTSTRAP="True"
+N_BOOT="1000"
 
 # Homogeneity score parameters
 MAXK="128"
@@ -40,6 +42,8 @@ SCRIPT_ARGS+=(--range-max "$RANGE_MAX")
 SCRIPT_ARGS+=(--k "$K")
 SCRIPT_ARGS+=(--Z "$Z")
 SCRIPT_ARGS+=(--seed "$SEED")
+SCRIPT_ARGS+=(--bootstrap "$BOOTSTRAP")
+SCRIPT_ARGS+=(--n-boot "$N_BOOT")
 
 # --- Debugger ---
 DEBUGGER_ARGS=()
@@ -65,6 +69,8 @@ echo "  - range_max: $RANGE_MAX"
 echo "  - k: $K"
 echo "  - Z: $Z"
 echo "Seed: $SEED"
+echo "Bootstrap: $BOOTSTRAP"
+echo "Number of bootstrap samples: $N_BOOT"
 echo "==============================="
 
 # Run analysis
