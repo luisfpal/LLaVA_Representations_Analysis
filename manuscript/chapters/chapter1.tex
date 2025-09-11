@@ -1,0 +1,107 @@
+\chapter{Literature Review}\label{ch:literature_review}
+
+\section{Instruction-tuned Large Language Models}
+
+\subsection{Transformer-based Language Models and the Residual Stream}
+
+The transformer architecture \cite{vaswaniAttentionAllYou2023} revolutionized natural language processing by modeling long-range dependencies more effectively than earlier architectures. This breakthrough paved the way for the era of foundation models, where large-scale transformers trained on massive, diverse datasets became general-purpose architectures adaptable to a wide range of downstream tasks \cite{bommasaniOpportunitiesRisksFoundation2022}. Originally designed for sequential data such as text or speech, this neural network architecture relies on \textit{self-attention} \cite{bahdanauNeuralMachineTranslation2016, parikhDecomposableAttentionModel2016}, which allows the model to weigh different parts of the input sequence when processing each token. By flexibly attending to different parts of the input sequence, transformers learn richer representations \cite{bengioRepresentationLearningReview2014}, capture context more effectively, and generate more accurate predictions.
+
+Transformers do not process raw text directly. Instead, text is decomposed into tokens---units such as words, subwords, or characters---using a tokenizer. A common scheme is Byte Pair Encoding (BPE) \cite{sennrichNeuralMachineTranslation2016}. The tokenizer is trained on a large corpus and builds a vocabulary $\mathcal{V}$ of size $V$, where each token is mapped to a unique integer index $t_i \in {1, \ldots, V}$. Given a string of text, the tokenizer converts it into a sequence ${t_1, \ldots, t_T}$ that the model can process.
+
+A language model is trained to predict the next token given the preceding ones. Formally, for a sequence of tokens $(t_1, \ldots, t_T)$, the joint probability is factorized using the chain rule of probability:
+
+\begin{equation*}
+P(t_1, \ldots, t_T) = \prod_{i=1}^{T} P(t_i \mid t_1, \ldots, t_{i-1}).
+\end{equation*}
+
+Training maximizes the log-likelihood of the observed tokens over a large corpus:
+
+\begin{equation*}
+\mathcal{L} = - \sum_{i=1}^{T} \log P_\theta(t_i \mid t_{<i}),
+\end{equation*}
+
+where $\theta$ denotes the model parameters. This objective ensures the model learns to generate text autoregressively, one token at a time.
+
+The decoder-only transformer, used for text generation, consists of a stack of $L$ blocks (Figure \ref{fig:transformer_decoder_block}). Each block has two main components: a masked self-attention layer followed by a multi-layer perceptron (MLP). Input tokens are first mapped into a $d$-dimensional embedding space by a learnable projection:
+
+\begin{equation*}
+e_i = W_{\text{emb}} \, t_i, \quad e_i \in \mathbb{R}^d,
+\end{equation*}
+
+where $W_{\text{emb}} \in \mathbb{R}^{d \times V}$ is the embedding matrix. These embeddings serve as the initial hidden states or representations:
+
+\begin{equation*}
+h_i^{(0)} = e_i, \quad i=1,\ldots,T.
+\end{equation*}
+
+Across the $L$ layers, the hidden states are repeatedly transformed but remain in $\mathbb{R}^d$. After the final block, the representation of the last token $h_T^{(L)}$ is projected back into vocabulary space to predict the next token:
+
+\begin{equation*}
+    z = W_{\text{out}} h_T^{(L)}, \quad P(t_{T+1} \mid t_{\leq T}) = \text{softmax}(z) \in \mathbb{R}^V,
+\end{equation*}
+
+where $W_{\text{out}} \in \mathbb{R}^{V \times d}$ maps the hidden state to vocabulary logits and the softmax produces a probability distribution over all tokens $t \in \mathcal{V}$.
+
+During generation, the model can then select the most likely next token,
+
+\begin{equation*}
+\hat{t}_{T+1} = \arg\max_{t \in \mathcal{V}} P(t \mid t_{\leq T}),
+\end{equation*}
+
+or sample from this distribution. The newly generated token $\hat{t}_{T+1}$ is appended to the sequence, and the process repeats, ensuring each prediction conditions on \emph{all} previously generated tokens.
+
+\paragraph{The Residual Stream.}
+
+A key design feature of the transformers architecture is the residual connection \cite{heDeepResidualLearning2015}, which guided the dimensional invariant feature of representations in the architecture. Instead of replacing information at each layer, residual connections preserve and accumulate it, forming  a continuous \textit{residual stream} \cite{elhage2021mathematical}---a single representational backbone that ``flows'' through the entire network, continuously updated but never replaced.
+
+Within each block, the residual stream is updated twice: first by attention, then by the feed-forward MLP. In practice, modern decoder-only transformers such as LLaMA \cite{touvronLLaMAOpenEfficient2023} adopt a \textit{pre-normalization} (pre-norm) design, where each transformation is applied to a normalized hidden state. Specifically, a Layer Normalization \cite{baLayerNormalization2016, zhangRootMeanSquare2019} method is applied before both the attention and the feed-forward sublayers. For input $h^{(\ell)}$ to block $\ell$, the residual stream is updated as
+
+\begin{align*}
+h'^{(\ell)} &= h^{(\ell)} + \text{Attn}\!\big(\text{LayerNorm}(h^{(\ell)})\big), \\
+h^{(\ell+1)} &= h'^{(\ell)} + \text{MLP}\!\big(\text{LayerNorm}(h'^{(\ell)})\big).
+\end{align*}
+
+This design has two consequences. First, it stabilizes gradient flow and eases optimization in deep networks by providing direct paths for information and gradients. Second, it enables later layers to refine earlier representations rather than overwrite them, ensuring information persists across depth. Figure \ref{fig:transformer_decoder_block} illustrates this pre-norm transformer decoder block, the backbone of LLaVA. A sequence of embeddings $x \in \mathbb{R}^{T \times d}$ flows through the residual stream, contextualized by attention, refined by the MLP, and accumulated across layers into a persistent $d$-dimensional representation.
+
+\subsection{Instruction-tuning and chatbots}
+
+Pretraining decoder-only LLMs purely with next-token prediction yields fluent, context-consistent continuations, but does not by itself confer the ability to follow human instructions or behave as interactive assistants or \emph{chatbots}. Instruction tuning \cite{weiFinetunedLanguageModels2022, zhangInstructionTuningLarge2024a, ouyangTrainingLanguageModels2022} adapts these models by fine-tuning on instruction-response pairs, often augmented with human preference signals, so they reliably follow natural-language prompts. A landmark example is InstructGPT \cite{ouyangTrainingLanguageModels2022}: aligning GPT-3 \cite{brownLanguageModelsAre2020} with human feedback substantially improved helpfulness and factuality, with a 1.3B model preferred over a 175B baseline on instruction-following tasks. This paradigm underlies modern conversational systems (e.g., ChatGPT) and has been widely adopted in open-source efforts; for instance, \emph{Vicuna} \cite{vicuna2023} fine-tunes LLaMA-family checkpoints on ShareGPT dialogue data, reports strong instruction following capabilities, and serves as the conversational backbone for several multimodal assistants \cite{liuVisualInstructionTuning2023, liuImprovedBaselinesVisual2024, zhuMiniGPT4EnhancingVisionLanguage2023}.
+
+\section{Vision-Language Models}
+
+Vision-language models (VLMs) extend large language models by incorporating visual inputs alongside text, enabling them to jointly process and reason over multimodal information. Language models alone are blind, vision models alone are mute, but VLMs can do both and reason about images. The core idea is to project both images and text into a shared representation space where cross-modal alignment can occur. Typically, this is achieved by pairing a vision encoder (such as a convolutional network or vision transformer) with a language backbone, and then training the system so that semantically related images and text are close in the embedding space \cite{radfordLearningTransferableVisual2021, liSurveyStateArt2025, liuVisualInstructionTuning2023, liBLIP2BootstrappingLanguageImage2023, liuImprovedBaselinesVisual2024, caffagniRevolutionMultimodalLarge2024}. This alignment allows the model to perform tasks such as image captioning, visual question answering, and image retrieval, where understanding both modalities is essential.
+
+Recent advances build on this foundation by tightly coupling vision and language components through joint training and instruction tuning. Models such as CLIP \cite{radfordLearningTransferableVisual2021} demonstrated the power of large-scale contrastive training for learning general-purpose visual-text embeddings, while newer systems like LLaVA \cite{liuVisualInstructionTuning2023, liuImprovedBaselinesVisual2024}, BLIP-2 \cite{liBLIP2BootstrappingLanguageImage2023}, and MiniGPT-4 \cite{zhuMiniGPT4EnhancingVisionLanguage2023} adapt pretrained LLMs and vision models (e.g., ViT \cite{dosovitskiyImageWorth16x162021}) with vision adapters or lightweight projection layers. These approaches leverage the reasoning abilities of LLMs while grounding them in visual content, producing multimodal assistants capable of following natural-language instructions about images. Other paradigms, such as Flamingo \cite{alayracFlamingoVisualLanguage2022} and Emu3 \cite{wangEmu3NextTokenPrediction2024}, move beyond lightweight adapters by directly unifying vision and language through cross-attention layers or joint multimodal pretraining. This allows models to handle interleaved image-text inputs and generalize across a broader set of multimodal tasks.
+
+\section{LLaVA}\label{sec:llava}
+
+LLaVA \cite{liuVisualInstructionTuning2023, liuImprovedBaselinesVisual2024} (Large Language and Vision Assistant) is one of the pioneering vision-language models developed as a general-purpose multimodal assistant, able to process and reason over both text and images. Its architecture combines three components: (i) a pretrained vision encoder (e.g., CLIP-ViT-L-336px in LLaVA v1.5); (ii) a pretrained large language model (e.g., Vicuna v1.5); and (iii) a multimodal connector, typically a two-layer MLP, that projects visual features into the token embedding space of the LLM. This architecture enables the model to process both text and images through a unified interface, following natural language instructions about visual content.
+
+Unlike earlier task-specific systems for captioning or visual question answering \cite{agrawalVQAVisualQuestion2016, luHierarchicalQuestionImageCoAttention2017, renExploringModelsData2015, xuShowAttendTell2016, vinyalsShowTellNeural2015}, LLaVA was trained to follow natural-language instructions grounded in visual input. A key component  for training LLaVA was a synthetically curated multimodal instruction-following dataset generated with GPT-4. Starting from open-source corpora such as COCO \cite{linMicrosoftCOCOCommon2015} and CC3M \cite{sharmaConceptualCaptionsCleaned2018}, the authors expanded simple image-text pairs into instruction-response conversations. Each instance follows the format (Figure \ref{fig:llava_architecture}):
+\texttt{User}: $X_v \; X_q$ <STOP> \texttt{Assistant}: $X_a$ <STOP>,
+where $X_v$ is the image, $X_q$ the question, and $X_a$ the assistant's answer. <STOP> marks the end of the conversation turn. The model is trained to predict $X_a$ given $X_q$ and $X_v$, and to determine where each conversation turn ends. An additional \texttt{System} message is also prepended to enforce the instruction-following style. GPT-4 curated the answers to include richer descriptions, dialogue structure, and multi-step reasoning. This design allowed LLaVA to develop multimodal conversational ability with relatively modest data and compute, while still achieving competitive benchmark results. Like other assistant-style models, LLaVA relies on a chat template that structures input as \texttt{System}, \texttt{User}, and \texttt{Assistant} roles, ensuring compatibility with instruction-following training.
+
+Training proceeds in two stages:
+
+\begin{itemize}
+\item \textbf{Feature Alignment (pretraining)}: The multimodal connector is trained while the vision encoder and LLM remain frozen. CLIP encodes each image into feature vectors, which the connector maps into the $d$-dimensional token space of the LLM. This ensures visual inputs can be directly interpreted as embeddings by the language model. The multimodal instruction training data is expanded from image-caption pairs to instruction-response conversations.
+\item \textbf{Visual Instruction Tuning (fine-tuning)}: The multimodal connector and the LLM are then fine-tuned jointly, while the vision encoder stays frozen. Using richer multimodal instruction-response pairs, the model learns to follow prompts and generate answers explicitly grounded in the input image.
+\end{itemize}
+
+\section{Mechanistic Interpretability}
+
+Mechanistic interpretability is the study of how neural networks implement specific algorithms internally by reverse-engineering their weights, neurons, and \emph{circuits} \cite{elhage2021mathematical} ---or subnetworks of interacting components--- into human-understandable mechanisms \cite{luoUnderstandingUtilizationSurvey2024}. With the increasing complexity of foundation models, there is a growing need to uncover their internal dynamics and decision-making processes. A wide range of methods has been developed, some specific to LLMs, others tailored to VLMs, and some applicable to both \cite{luoUnderstandingUtilizationSurvey2024, linSurveyMechanisticInterpretability2025}. Mechanistic interpretability is fundamental not only for explaining model behavior but also for mitigating undesired behaviors, improving safety and privacy, enhancing robustness and generalization, informing model design and much more \cite{linSurveyMechanisticInterpretability2025}.
+
+Recent work has applied these methods to investigate how LLaVA changes through fine-tuning and how its mechanisms compare to its LLM backbone. Yu and Ananiadou \cite{yuUnderstandingMultimodalLLMs2024} compared LLaVA's mechanisms for visual question answering (VQA) against text QA, showing that: (i) LLaVA VQA relies on a similar in-context learning strategy as Vicuna text QA; (ii) visual embeddings are highly interpretable when projected into the language embedding space; and (iii) visual instruction tuning enhances certain textual capabilities of the base LLM rather than merely adding new ones. Khayatan et al. \cite{khayatanAnalyzingFinetuningRepresentation2025} analyzed fine-tuning dynamics through concept-based probing, mapping hidden states to interpretable visual and textual concepts. They showed that fine-tuning reshapes the concept space: some concepts specialize, new ones emerge, and others vanish. Importantly, many of these changes can be modeled as a simple shift from the original representation space, enabling direct steering of outputs by editing internal representations. 
+
+\section{Representation Similarity and Internal Geometry}
+
+Another important line of research for interpreting and improving neural networks (e.g., by fine-tuning) focuses on measuring similarity of neural networks and analyzing their internal representations  \cite{klabundeSimilarityNeuralNetwork2025}. This is a vast field which involves analyzing the geometry of the representation space of models through data and grounds the detection of real representation sameness with mathematical guarantees.  One approach is representational similarity, which considers how activations of intermediate layers differ, and another one is functional similarity, which considers how models differ in their outputs \cite{klabundeSimilarityNeuralNetwork2025}. In this thesis, we focus on a subset of representational similarity approaches---namely, neighborhood overlap \cite{doimoHierarchicalNucleationDeep2020}, linear CKA \cite{kornblithSimilarityNeuralNetwork2019} and intrinsic dimension \cite{ansuiniIntrinsicDimensionData2019}---which have been applied in prior work to quantify similarities and differences in neural network representations. Here we use it to analyze the changes in LLaVA after visual instruction fine-tuning through its data representations.  A detailed description of their computation and use in our study is provided in Chapter \ref{ch:methodology}.
+
+Prior studies have applied these tools across CNNs and transformers to reveal how representation geometry evolves through depth. Doimo et al. \cite{doimoHierarchicalNucleationDeep2020} used neighborhood overlap to show that deep CNNs learn through a non-smooth process, with an abrupt transition in neighborhood composition toward ground-truth classes in the final layers. Ansuini et al. \cite{ansuiniIntrinsicDimensionData2019} found that trained CNN representations lie on very low-dimensional manifolds: intrinsic dimension rises in early layers and then decreases in deeper layers, reaching its minimum in the last hidden layer. Extending these insights to transformers, Valeriani et al. \cite{valerianiGeometryHiddenRepresentations2023} observed the same expand-then-contract trend in token dimensionality and reported that neighborhood structure stabilizes in later layers, indicating more semantic clustering. Doimo et al. \cite{doimoRepresentationLandscapeFewShot} further showed that late-layer neighborhood composition in LLMs changes the most during fine-tuning compared to zero-shot, and--through density-based clustering---that few-shot representations initially form clear semantic clusters (e.g., by question type or topic). After supervised fine-tuning, these clusters become more mixed, while later layers develop distinct answer-class clusters (sharper modes aligned with target answers). Finally, Serra et al. \cite{serraNarrowGateLocalizeda} analyzed VLMs and found that image and text representations become more separated within the residual stream, highlighting modality-specific organization in multimodal models.
+
+\section{Cross-Modal Alignment and Modality Gap}
+
+Multimodal models combine representations from different modalities to solve a task \cite{liSurveyStateArt2025}. In VLMs such as LLaVA, however, image and text embeddings often cluster separately rather than fully overlapping \cite{liangMindGapUnderstanding2022, roleFillGapQuantifying2025}. Liang et al. \cite{liangMindGapUnderstanding2022} formally studied this \emph{modality gap} in the context of the CLIP model \cite{radfordLearningTransferableVisual2021}, showing that image and text embeddings form distinct clusters with a measurable offset between their centroids. They concluded that this gap arises partly from initialization and is reinforced during contrastive training, which aligns matched pairs but does not explicitly intermix modalities. Interestingly, they found that a wider gap sometimes improves CLIP's zero-shot accuracy and fairness metrics by preventing interference between modalities. This suggests the modality gap is not simply a training artifact but may represent an equilibrium that balances cross-modal alignment with in-modal discrimination. In this thesis, we study whether visual instruction tuning changes the modality gap of LLaVA's internal representations, as part of addressing the broader question: \emph{what is the impact of the fine-tuning stage on the internal representations of the LLM backbone?}
+
+While the modality gap does not necessarily harm performance in CLIP, later research argued that reducing it can benefit tasks requiring closer cross-modal interchangeability, such as multimodal retrieval. Goel et al. \cite{goelCyCLIPCyclicContrastive2022} introduced CyCLIP, which augments the contrastive loss with regularizers to enforce symmetry between image and text embedding spaces. This reduced in-modal vs. cross-modal discrepancies, leading to more balanced multimodal representations, though the gap was not eliminated. More recently, Role et al. \cite{roleFillGapQuantifying2025} applied spectral- and optimal transport–based approaches to further shrink the gap, reporting gains on several downstream benchmarks. Together, these works show that training-time and post-processing interventions can meaningfully alter cross-modal geometry. 

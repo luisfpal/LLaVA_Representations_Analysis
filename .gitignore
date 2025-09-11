@@ -8,3 +8,4 @@ old/
 notebooks/analyze_heads_representations.ipynb
 notebooks/plot_intrinsic_dimension.ipynb
 notebooks/plot_renyi_entropy.ipynb
+.idea/

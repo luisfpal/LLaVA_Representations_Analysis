@@ -857,7 +857,11 @@ class ResultsLoader:
     # === Data Access Methods ===
 
     def get_entropy(
-        self, dataset: str, model: str, stream_type: str, pooling: str
+        self,
+        dataset: str,
+        model: str,
+        stream_type: str,
+        pooling: str,
     ) -> torch.Tensor:
         """Get dataset entropy data."""
         key = f"{stream_type}_{pooling}"
@@ -869,7 +873,11 @@ class ResultsLoader:
             raise KeyError(f"Entropy data not found: {dataset}/{model}/{key}")
 
     def get_prompt_entropy(
-        self, dataset: str, model: str, stream_type: str, pooling: str
+        self,
+        dataset: str,
+        model: str,
+        stream_type: str,
+        pooling: str,
     ) -> torch.Tensor:
         """Get prompt entropy data."""
         key = f"{stream_type}_{pooling}"

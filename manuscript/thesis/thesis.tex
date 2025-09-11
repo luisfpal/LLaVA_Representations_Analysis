@@ -1,0 +1,44 @@
+% Master's Thesis
+
+\documentclass[a4paper,11pt,oneside,openany]{book}
+
+% --- Load Thesis Style ---
+\usepackage{../packages/thesis}
+\setlength{\headheight}{14pt}
+
+% --- Setup Thesis ---
+\setupThesis
+
+% --- Bibliography ---
+\addbibresource{../bibliography/zotero_thesis_papers.bib}
+\addbibresource{../bibliography/additional_references.bib}
+
+% --- Document Start ---
+\begin{document}
+
+% --- Frontmatter ---
+\input{../frontmatter/front.tex}      % Title page
+\input{../frontmatter/dedication}     % Dedication (optional)
+\input{../frontmatter/acknowledgment} % Acknowledgments (optional)
+\input{../frontmatter/abstract}       % Abstract
+
+% --- Table of Contents ---
+\tableofcontents  
+
+% --- Main Chapters ---
+\input{../chapters/introduction}
+\input{../chapters/chapter1}
+\input{../chapters/chapter2}
+\input{../chapters/chapter3}
+\input{../chapters/conclusion}
+
+% --- Appendix ---
+\appendix
+\input{../chapters/appendix}
+
+\backmatter
+
+% --- Bibliography ---
+\printbibliography[title=References]
+
+\end{document}

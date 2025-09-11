@@ -19,9 +19,10 @@ def plot_similarity_measure_matrix(
     max_xticks: Optional[int] = None,
     max_yticks: Optional[int] = None,
     annot_font_size: int = 8,
-    colorbar_labelsize: int = 12,
+    colorbar_labelsize: int = 14,
     show_annotations: bool = True,
     add_title: bool = True,
+    colorbar_label: Optional[str] = None,
 ) -> None:
     """
     Create a similarity measure heatmap on a provided matplotlib axis.
@@ -42,6 +43,8 @@ def plot_similarity_measure_matrix(
         annot_font_size: Font size for cell annotations
         colorbar_labelsize: Font size for colorbar tick labels
         show_annotations: Whether to show annotations on the heatmap
+        add_title: Whether to add a title to the plot
+        colorbar_label: Optional label for the colorbar
     """
     # Convert torch tensor to DataFrame if needed
     if isinstance(matrix_similarities, torch.Tensor):
@@ -219,9 +222,15 @@ def plot_similarity_measure_matrix(
     colorbar = ax.collections[0].colorbar
     colorbar.ax.tick_params(labelsize=colorbar_labelsize)
 
+    # Set colorbar label if provided
+    if colorbar_label:
+        colorbar.set_label(colorbar_label, fontsize=colorbar_labelsize)
+
     # Set titles and labels
     if add_title:
-        ax.set_title(f"{title} [{measure}]" if title else f"[{measure}]", fontsize=16)
+        ax.set_title(
+            f"{title}" if title else f"[{measure}]", fontsize=14, fontweight="bold"
+        )
     ax.set_xlabel(xlabel, fontsize=14)
     ax.set_ylabel(ylabel, fontsize=14)
 
@@ -254,7 +263,7 @@ def plot_similarity_measure_matrix(
     ax.set_yticks([i + 0.5 for i in y_tick_indices])  # Center ticks in cells
     ax.set_xticklabels(x_tick_labels, rotation=45, ha="right")
     ax.set_yticklabels(y_tick_labels, rotation=0)
-    ax.tick_params(axis="both", labelsize=12)
+    ax.tick_params(axis="both", labelsize=14)
 
     # ------------------ MANUAL CELL ANNOTATION ------------------
     if show_annotations:
@@ -300,6 +309,7 @@ def plot_similarity_measure_heatmap(
     max_yticks: Optional[int] = None,
     annot_font_size: int = 8,
     colorbar_labelsize: int = 12,
+    colorbar_label: Optional[str] = None,
 ) -> None:
     """
     Create a standalone similarity measure heatmap with its own figure.
@@ -321,6 +331,7 @@ def plot_similarity_measure_heatmap(
         max_yticks: Maximum number of y-axis ticks to show (None = show all)
         annot_font_size: Font size for cell annotations
         colorbar_labelsize: Font size for colorbar tick labels
+        colorbar_label: Optional label for the colorbar
     """
     # Create figure and axis for standalone plot
     fig, ax = plt.subplots(figsize=figsize)
@@ -340,6 +351,7 @@ def plot_similarity_measure_heatmap(
         max_yticks=max_yticks,
         annot_font_size=annot_font_size,
         colorbar_labelsize=colorbar_labelsize,
+        colorbar_label=colorbar_label,
     )
 
     # Handle figure styling and display/saving

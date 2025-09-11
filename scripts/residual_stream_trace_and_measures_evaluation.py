@@ -71,6 +71,8 @@ DATASETS = {
     },
 }
 
+SUFFIX = "chat"
+
 MODELS = {
     "multimodal_model": {
         "multimodal_model_name_or_path": "llava-hf/llava-1.5-7b-hf",
@@ -425,7 +427,7 @@ def main():
                                 {"layers_dataset_entropy": layers_dataset_entropy},
                                 os.path.join(
                                     model_dir,
-                                    f"dataset_entropy_{residual_stream_type}_{tokens_pooling_method}.safetensors",
+                                    f"dataset_entropy_{residual_stream_type}_{tokens_pooling_method}_{SUFFIX}.safetensors",
                                 ),
                             )
                         else:
@@ -441,7 +443,7 @@ def main():
                                 {"layers_prompt_entropy": layers_prompt_entropy},
                                 os.path.join(
                                     model_dir,
-                                    f"prompt_entropy_{residual_stream_type}_{tokens_pooling_method}.safetensors",
+                                    f"prompt_entropy_{residual_stream_type}_{tokens_pooling_method}_{SUFFIX}.safetensors",
                                 ),
                             )
 
