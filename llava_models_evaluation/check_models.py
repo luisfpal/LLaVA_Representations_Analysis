@@ -97,7 +97,7 @@ def check_collection(collection_name):
     
     # Get model names
     collection_prefix = MODELS_COLLECTION[collection_name]
-    model_names = [f"{collection_prefix}{i}" for i in range(0, 10001, 1000)]
+    model_names = [f"{collection_prefix}{i}" for i in range(1000, 10001, 1000)]
     
     # Track results
     successful_models = []
