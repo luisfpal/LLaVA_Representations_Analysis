@@ -578,15 +578,15 @@ def benchmark_model_captioning_processed_dataloader(
         weight=clip_weight,
         batch_size=clip_batch_size,
     )
-    ref_clip_score = compute_ref_clip_score(
-        ground_truth_images,
-        generated_captions,
-        reference_captions,
-        clip_processor,
-        clip_model,
-        weight=clip_weight,
-        batch_size=clip_batch_size,
-    )
+    # ref_clip_score = compute_ref_clip_score(
+    #     ground_truth_images,
+    #     generated_captions,
+    #     reference_captions,
+    #     clip_processor,
+    #     clip_model,
+    #     weight=clip_weight,
+    #     batch_size=clip_batch_size,
+    # )
 
     # Move model back to CPU
     clip_model.to("cpu")
@@ -613,5 +613,5 @@ def benchmark_model_captioning_processed_dataloader(
     return {
         "CIDEr": cider,
         "CLIP-S": clip_score,
-        "RefCLIP-S": ref_clip_score,
+        # "RefCLIP-S": ref_clip_score,
     }

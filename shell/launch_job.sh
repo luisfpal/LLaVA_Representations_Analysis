@@ -18,7 +18,8 @@ PROJECT_ROOT="$HOME/multimodal_finetuned_representations"
 LOG_DIR="$PROJECT_ROOT/.experiments_logs"
 mkdir -p "$LOG_DIR"
 
-SCRIPT="modalities_similarities.sh"
+SCRIPT="compute_id_correlation.sh"
+# SCRIPT="modalities_similarities.sh"
 # SCRIPT="transplanting_layers_qa_benchmarking.sh"
 # SCRIPT="transplanting_layers_caption_benchmarking.sh"
 
