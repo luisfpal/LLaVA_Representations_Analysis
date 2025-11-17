@@ -1,0 +1,18 @@
+[0] Config.pm:307> INFO - This is Biber 2.19
+[0] Config.pm:310> INFO - Logfile is 'thesis.blg'
+[59] biber:340> INFO - === Thu Sep 11, 2025, 12:03:16
+[71] Biber.pm:419> INFO - Reading 'thesis.bcf'
+[135] Biber.pm:979> INFO - Found 77 citekeys in bib section 0
+[145] Biber.pm:4419> INFO - Processing section 0
+[153] Biber.pm:4610> INFO - Looking for bibtex file '../bibliography/zotero_thesis_papers.bib' for section 0
+[164] bibtex.pm:1713> INFO - LaTeX decoding ...
+[320] bibtex.pm:1519> INFO - Found BibTeX data source '../bibliography/zotero_thesis_papers.bib'
+[1393] Biber.pm:4610> INFO - Looking for bibtex file '../bibliography/additional_references.bib' for section 0
+[1395] bibtex.pm:1713> INFO - LaTeX decoding ...
+[1402] bibtex.pm:1519> INFO - Found BibTeX data source '../bibliography/additional_references.bib'
+[1525] UCollate.pm:68> INFO - Overriding locale 'en-US' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[1526] UCollate.pm:68> INFO - Overriding locale 'en-US' defaults 'variable = shifted' with 'variable = non-ignorable'
+[1526] Biber.pm:4239> INFO - Sorting list 'none/global//global/global' of type 'entry' with template 'none' and locale 'en-US'
+[1526] Biber.pm:4245> INFO - No sort tailoring available for locale 'en-US'
+[1581] bbl.pm:660> INFO - Writing 'thesis.bbl' with encoding 'UTF-8'
+[1651] bbl.pm:763> INFO - Output to thesis.bbl

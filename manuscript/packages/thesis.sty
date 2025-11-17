@@ -1,0 +1,137 @@
+% Thesis Style File
+% Master's Thesis Template - Clean, modular structure
+
+% === Essential Packages ===
+\RequirePackage[english]{babel}
+\RequirePackage[utf8]{inputenc}
+\RequirePackage[T1]{fontenc}
+\RequirePackage{caption}
+\RequirePackage{geometry} % Page layout
+\RequirePackage{graphicx}
+\RequirePackage{floatrow}
+\RequirePackage{subcaption}
+\RequirePackage{tabularx}
+\RequirePackage{longtable}
+\RequirePackage{bm}
+\RequirePackage{physics}
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+\RequirePackage{amsfonts}
+\RequirePackage{physics}
+\RequirePackage{setspace}
+\RequirePackage{threeparttable}
+
+
+% === Bibliography (biblatex) ===
+\RequirePackage[
+  backend=biber,
+  style=numeric-comp,        % numeric citations [1], [1-3]
+  giveninits=true,         % initials for first names
+  maxbibnames=99,          % show all authors in the bibliography
+  doi=false,                % show DOI for academic papers
+  url=false,                % show URLs for all entries
+  urldate=false,            % show urldate for all entries
+  eprint=false,             % show arXiv links
+  isbn=false,              % hide ISBN
+  sorting=none,            % maintain order of appearance
+  defernumbers=true,       % number references as they appear
+  maxcitenames=2,          % "et al." in citations after 2
+  date=year                % print only the year if a full date is present
+]{biblatex}
+
+% Ultra-minimal cleanup (removes unwanted metadata fields)
+\AtEveryBibitem{%
+  \clearfield{abstract}%
+  \clearfield{file}%
+  \clearfield{keywords}%
+  \clearfield{shorttitle}%
+  \clearfield{pubstate}%
+  \clearfield{eprintclass}%
+  \clearfield{eprinttype}%
+  % keep 'note' if you plan to mark "Dataset" there
+  % \clearfield{note}%
+  \clearlist{language}%
+}
+
+% Show URL and urldate fields only for @online entries
+\DeclareFieldFormat{url}{%  
+  \ifentrytype{online}{\mkbibacro{URL}\addcolon\space\url{#1}}{}%
+}
+\DeclareFieldFormat{urldate}{%
+  \ifentrytype{online}{}{}%
+}
+
+% Make titles hyperlinks to DOI/URL for non-online entries
+\DeclareFieldFormat{title}{%
+  \ifentrytype{online}{#1}{%
+    \iffieldundef{doi}{%
+      \iffieldundef{url}{#1}{\href{\thefield{url}}{#1}}%
+    }{\href{https://doi.org/\thefield{doi}}{#1}}%
+  }%
+}
+
+% Optional: remove "In:" before venues for a cleaner look
+\renewbibmacro{in:}{}
+
+% === Hyperref (must be last) ===
+\RequirePackage{hyperref}
+\RequirePackage{xspace}
+\RequirePackage{etoolbox}
+\RequirePackage{bookmark}
+
+% === Colors and Lists ===
+\RequirePackage{color}
+\RequirePackage{xcolor}
+\RequirePackage{enumitem}
+\RequirePackage{paralist}
+
+% === Tables ===
+\RequirePackage{array}
+\RequirePackage{booktabs}
+\RequirePackage{multirow}
+\RequirePackage{siunitx}
+
+% === Graphics and Figures ===
+\RequirePackage{wrapfig}
+\RequirePackage{fontawesome5}
+
+% === URLs and Algorithms ===
+\RequirePackage{url}
+\RequirePackage{tikz-cd}
+\RequirePackage{algorithm}
+\RequirePackage{algorithmicx}
+\RequirePackage{algpseudocode}
+
+% === Dummy Text ===
+\RequirePackage{lipsum}
+
+% === Page Style ===
+\RequirePackage{fancyhdr}
+
+% === Chapter Style Setup ===
+\renewcommand{\chaptermark}[1]{\markboth{Chapter \thechapter. #1}{}} 
+
+% === Setup Functions ===
+\newcommand{\setupThesis}{
+    % Page numbering
+    \pagenumbering{arabic}
+    
+    % Equation numbering - continuous from 1 onwards
+    \renewcommand{\theequation}{\arabic{equation}}
+    
+    % Page style
+    \pagestyle{fancy}
+    \fancyhf{}
+    \fancyhead[C]{\nouppercase{\leftmark}}
+    \fancyfoot[C]{\thepage}
+    
+    
+    % Hyperref setup
+    \hypersetup{
+      colorlinks=true,
+      citecolor=blue,
+      filecolor=blue,
+      linkcolor=blue,
+        urlcolor=blue
+    }
+}

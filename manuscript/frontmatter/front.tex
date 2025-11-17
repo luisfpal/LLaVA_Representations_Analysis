@@ -1,0 +1,50 @@
+% Thesis title and author
+
+% Import thesis information
+\input{../frontmatter/thesis_info}
+
+\begin{titlepage}
+    \begin{center}
+    % Insert the background here (front page)
+    {\LARGE {\bfseries UNIVERSITY OF TRIESTE \\}}
+    \vspace{.5cm}
+    {\Large {\bfseries Department of Mathematics and Geoscience \\}}
+    \vspace{1cm}
+    \includegraphics[width=0.4\textwidth]{../images/university/university_seal.pdf} \\
+    \vspace{1cm}
+    {\Large
+        Master's Degree in \\ Data Science and Artificial Intelligence \\
+    }
+    \vspace{0.7cm}
+    {\Large 
+        {\bfseries
+        \thesisTitle
+        }
+    }
+    \vspace{0.7cm}
+
+    % Thesis date
+    {\large \thesisDate \\
+    }
+
+    % Table for candidate and supervisors, with vertical line and footnotes for affiliations
+    \vfill
+    \begin{threeparttable}
+        \begin{tabular}{c c c c r c c | c c l}
+            & & & & \candidateTitle & & & & & \supervisorsTitle \\
+            & & & & \bfseries \candidateName & & & & & \bfseries \supervisorOneName \tnote{\affiliationOneSymbol} \\ 
+            & & & & & & & & & \bfseries \supervisorTwoName \tnote{\affiliationOneSymbol} \\
+            & & & & & & & & & \\
+            & & & & & & & & & \cosupervisorsTitle \\ 
+            & & & & & & & & & \bfseries \cosupervisorOneName \tnote{\affiliationOneSymbol}  \\ 
+        \end{tabular}
+        \vspace{1cm} % Adjust this value to control the vertical position of the footnotes
+        \hfill
+        \parbox{0.3\linewidth}{ % Adjust the width as needed
+        \begin{tablenotes}
+            \item[\affiliationOneSymbol] \affiliationOne
+        \end{tablenotes}
+          }
+    \end{threeparttable}
+\end{center}
+\end{titlepage}

@@ -162,6 +162,11 @@ class ResultsLoader:
                 print(f"⚠️  Failed to load {filename}: {e}")
                 continue
 
+            if "plain" in filename:
+                filename = filename.replace("_plain", "")
+            elif "chat" in filename:
+                filename = filename.replace("_chat", "")
+
             if filename.startswith("dataset_entropy_"):
                 key = filename.replace("dataset_entropy_", "")
                 model_data["dataset_entropy"][key] = data
@@ -631,9 +636,9 @@ class ResultsLoader:
                     ] = data
                 elif "two_parts" in filename:
                     key = filename.split("two_parts_")[-1]
-                    transplanting_layers_qa_benchmarking[dataset][f"two_parts_{key}"] = (
-                        data
-                    )
+                    transplanting_layers_qa_benchmarking[dataset][
+                        f"two_parts_{key}"
+                    ] = data
 
         return transplanting_layers_qa_benchmarking
 
@@ -852,7 +857,11 @@ class ResultsLoader:
     # === Data Access Methods ===
 
     def get_entropy(
-        self, dataset: str, model: str, stream_type: str, pooling: str
+        self,
+        dataset: str,
+        model: str,
+        stream_type: str,
+        pooling: str,
     ) -> torch.Tensor:
         """Get dataset entropy data."""
         key = f"{stream_type}_{pooling}"
@@ -864,7 +873,11 @@ class ResultsLoader:
             raise KeyError(f"Entropy data not found: {dataset}/{model}/{key}")
 
     def get_prompt_entropy(
-        self, dataset: str, model: str, stream_type: str, pooling: str
+        self,
+        dataset: str,
+        model: str,
+        stream_type: str,
+        pooling: str,
     ) -> torch.Tensor:
         """Get prompt entropy data."""
         key = f"{stream_type}_{pooling}"
@@ -915,7 +928,9 @@ class ResultsLoader:
     def get_transplant(self, dataset: str, experiment: str) -> pd.DataFrame:
         """Get transplantation experiment results."""
         try:
-            return self.data["transplanting_layers_qa_benchmarking"][dataset][experiment]
+            return self.data["transplanting_layers_qa_benchmarking"][dataset][
+                experiment
+            ]
         except KeyError:
             raise KeyError(f"Transplant data not found: {dataset}/{experiment}")
 
@@ -1046,7 +1061,9 @@ class ResultsLoader:
 
         if "transplanting_layers_qa_benchmarking" in self.data:
             print("\n🔄 TRANSPLANTATION:")
-            for dataset, exps in self.data["transplanting_layers_qa_benchmarking"].items():
+            for dataset, exps in self.data[
+                "transplanting_layers_qa_benchmarking"
+            ].items():
                 print(f"  {dataset}: {list(exps.keys())}")
 
         if "modalities_similarities" in self.data:

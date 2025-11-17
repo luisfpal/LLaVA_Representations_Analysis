@@ -5,10 +5,10 @@
 DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 
 # Analysis configuration
-DATASET_TYPE="coco_captioning"
-RESIDUAL_STREAM_TYPES="output_layer,post_mlp"
-TOKENS_POOLING_METHODS="last,mean"
-SIMILARITY_MEASURES="neighborhood_overlap,linear_cka,svcca"
+DATASET_TYPE="coco_captioning, cocoqa_img"
+RESIDUAL_STREAM_TYPES="output_layer"
+TOKENS_POOLING_METHODS="last"
+SIMILARITY_MEASURES=""
 
 # Similarity measure parameters
 MAXK="30"

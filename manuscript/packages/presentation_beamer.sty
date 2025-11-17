@@ -1,0 +1,80 @@
+%--------------------------------------------------------------------------------------
+% packages_beamer.sty - Clean Beamer Package
+%--------------------------------------------------------------------------------------
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{packages_beamer}[2024/11/09 Custom Package for Beamer Presentations]
+
+%------------------------------------------
+% Essential Packages
+%------------------------------------------
+\RequirePackage[utf8]{inputenc}         % UTF-8 encoding
+\RequirePackage[T1]{fontenc}            % Better fonts
+\RequirePackage[english]{babel}         % English language
+\RequirePackage{amsmath, amssymb, amsfonts, mathrsfs}  % Math packages
+\RequirePackage{physics}                % Physics notation (\dd, \braket)
+\RequirePackage{graphicx}               % Images
+\RequirePackage{xcolor}                 % Colors
+\RequirePackage{float}                  % Figure placement
+\RequirePackage{array, booktabs}        % Tables
+\RequirePackage[style=ieee,backend=biber]{biblatex}  % Bibliography
+\RequirePackage{csquotes}               % Quotations
+\RequirePackage{hyperref}               % Links
+\RequirePackage{bookmark}               % PDF bookmarks
+\RequirePackage{fontawesome5}           % Icons
+\RequirePackage{tikz}                % TikZ for diagrams
+
+%------------------------------------------
+% Beamer Theme & Styling
+%------------------------------------------
+\mode<presentation> {
+    \usefonttheme{serif}
+    \usetheme[secheader]{Boadilla}
+    \usecolortheme[named=black]{structure}
+    \setbeamertemplate{navigation symbols}{}
+}
+
+% Colors
+\definecolor{footlinebg}{rgb}{0.2, 0.2, 0.2}    % Dark gray
+\definecolor{footlinetext}{rgb}{1, 1, 1}        % White
+\definecolor{titlecolor}{rgb}{0.9, 0.9, 0.9}    % Light gray
+
+% Styling
+\setbeamerfont{frametitle}{series=\bfseries}
+\setbeamercolor{frametitle}{fg=blue}
+\setbeamercolor{title}{fg=blue}
+\setbeamercolor{author}{fg=gray}
+\setbeamerfont{author}{series=\bfseries}
+\setbeamercolor{author in head/foot}{bg=footlinebg, fg=footlinetext}
+\setbeamercolor{title in head/foot}{bg=titlecolor}
+\setbeamercolor{date in head/foot}{bg=footlinebg, fg=footlinetext}
+
+% Layout
+\setbeamersize{text margin left=0.75cm, text margin right=0.75cm}
+\setbeamertemplate{section in toc}[sections numbered]
+\setbeamertemplate{subsection in toc}[subsections numbered]
+\setbeamertemplate{headline}{}
+
+% Footline
+\setbeamertemplate{footline}{
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.3\paperwidth,ht=2.25ex,dp=2ex,center]{author in head/foot}%
+            \usebeamerfont{author in head/foot}\bfseries\insertshortauthor~~(\insertshortinstitute)
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.4\paperwidth,ht=2.25ex,dp=2ex,center]{title in head/foot}%
+            \usebeamerfont{title in head/foot}\bfseries\insertshorttitle
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.3\paperwidth,ht=2.25ex,dp=2ex,center]{date in head/foot}%
+            \usebeamerfont{date in head/foot}\bfseries\insertshortdate{}\hspace*{2em}
+            \insertframenumber{}/\inserttotalframenumber
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+%------------------------------------------
+% Settings & Commands
+%------------------------------------------
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue, filecolor=blue}
+\newcommand{\sectionvspace}{\vspace{1em}}
+\DeclareMathOperator{\softmax}{softmax}

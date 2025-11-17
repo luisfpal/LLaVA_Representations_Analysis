@@ -1,0 +1,66 @@
+\babel@toc {english}{}\relax 
+\contentsline {chapter}{Dedication}{1}{chapter*.2}%
+\contentsline {chapter}{Acknowledgments}{2}{chapter*.3}%
+\contentsline {chapter}{Abstract}{3}{chapter*.4}%
+\contentsline {chapter}{Abstract (Italian)}{4}{chapter*.5}%
+\contentsline {chapter}{\numberline {1}Introduction}{7}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Context}{7}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Research Problem and Motivation}{8}{section.1.2}%
+\contentsline {section}{\numberline {1.3}Contributions}{8}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Thesis Structure}{9}{section.1.4}%
+\contentsline {chapter}{\numberline {2}Literature Review}{10}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Instruction-tuned Large Language Models}{10}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Transformer-based Language Models and the Residual Stream}{10}{subsection.2.1.1}%
+\contentsline {paragraph}{The Residual Stream.}{11}{section*.8}%
+\contentsline {subsection}{\numberline {2.1.2}Instruction-tuning and chatbots}{12}{subsection.2.1.2}%
+\contentsline {section}{\numberline {2.2}Vision-Language Models}{12}{section.2.2}%
+\contentsline {section}{\numberline {2.3}LLaVA}{13}{section.2.3}%
+\contentsline {section}{\numberline {2.4}Mechanistic Interpretability}{14}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Representation Similarity and Internal Geometry}{14}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Cross-Modal Alignment and Modality Gap}{15}{section.2.6}%
+\contentsline {chapter}{\numberline {3}Methodology}{16}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Datasets}{16}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1}Question Answering}{16}{subsection.3.1.1}%
+\contentsline {paragraph}{MMLU.}{16}{section*.10}%
+\contentsline {paragraph}{ScienceQA.}{16}{section*.11}%
+\contentsline {paragraph}{Custom Dataset: COCOVQA.}{17}{section*.12}%
+\contentsline {paragraph}{Evaluation Metric.}{18}{section*.13}%
+\contentsline {subsection}{\numberline {3.1.2}Image Captioning}{18}{subsection.3.1.2}%
+\contentsline {paragraph}{CIDEr.}{18}{section*.14}%
+\contentsline {paragraph}{CLIP-Score.}{19}{section*.15}%
+\contentsline {section}{\numberline {3.2}Residual Stream Extraction Method}{19}{section.3.2}%
+\contentsline {section}{\numberline {3.3}Representational Similarity Measures}{20}{section.3.3}%
+\contentsline {subsection}{\numberline {3.3.1}Neighborhood Overlap}{21}{subsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.3.2}Linear CKA}{21}{subsection.3.3.2}%
+\contentsline {section}{\numberline {3.4}Geometry of Representations}{21}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1}Intrinsic Dimension of Representations}{21}{subsection.3.4.1}%
+\contentsline {subsection}{\numberline {3.4.2}Modality Gap}{22}{subsection.3.4.2}%
+\contentsline {paragraph}{Experiment Setup.}{22}{section*.17}%
+\contentsline {paragraph}{Advanced Density Peaks (ADP) Clustering.}{24}{section*.18}%
+\contentsline {section}{\numberline {3.5}Functional Localization via Layer Patching}{25}{section.3.5}%
+\contentsline {paragraph}{Question Answering.}{26}{section*.19}%
+\contentsline {paragraph}{Image Captioning.}{26}{section*.20}%
+\contentsline {section}{\numberline {3.6}Computational Resources and Reproducibility}{26}{section.3.6}%
+\contentsline {chapter}{\numberline {4}Results and Discussion}{27}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Zero-shot QA: Performance Effects of Visual Instruction Tuning}{27}{section.4.1}%
+\contentsline {paragraph}{Prompting and format sensitivity.}{27}{section*.22}%
+\contentsline {paragraph}{Task type matters (open-ended vs.\ multiple-choice).}{28}{section*.23}%
+\contentsline {section}{\numberline {4.2}Where the Backbone Changes: Representational Similarity}{29}{section.4.2}%
+\contentsline {paragraph}{Coarse-grained: similarity at the layers level.}{29}{section*.24}%
+\contentsline {paragraph}{Fine-grained: similarity at the heads level.}{30}{section*.26}%
+\contentsline {paragraph}{Impact of visual instruction tuning on representation similarity.}{30}{section*.28}%
+\contentsline {section}{\numberline {4.3}Geometry After Fine-Tuning: Intrinsic Dimension}{32}{section.4.3}%
+\contentsline {paragraph}{What ID reveals about fine-tuning.}{33}{section*.30}%
+\contentsline {section}{\numberline {4.4}Modality Gap After Fine-Tuning: Alignment vs.\ Separation}{34}{section.4.4}%
+\contentsline {paragraph}{Directional alignment.}{34}{section*.31}%
+\contentsline {paragraph}{Cluster homogeneity.}{34}{section*.34}%
+\contentsline {paragraph}{Effect of fine-tuning on the modality gap.}{35}{section*.35}%
+\contentsline {paragraph}{Summary and scope.}{35}{section*.36}%
+\contentsline {section}{\numberline {4.5}Task-Level Validation via Layer Patching}{36}{section.4.5}%
+\contentsline {subsection}{\numberline {4.5.1}Question Answering}{36}{subsection.4.5.1}%
+\contentsline {subsection}{\numberline {4.5.2}Image Captioning}{36}{subsection.4.5.2}%
+\contentsline {paragraph}{What patching reveals.}{38}{section*.39}%
+\contentsline {chapter}{\numberline {5}Conclusion}{39}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Key findings}{39}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Limitations and Future Work}{40}{section.5.2}%
+\contentsline {chapter}{\numberline {A}Appendix}{41}{appendix.A}%
