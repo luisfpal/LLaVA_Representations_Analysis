@@ -8,7 +8,7 @@ DATASET_PATH_OR_NAME="~/scratch/datasets/cocoqa_unified"
 DATASET_TYPE="cocoqa_txt,cocoqa_img"
 
 # ID correlation parameters
-ID_NN_RANK="16"
+ID_NN_RANK="100"
 ID_CORRELATION_PERMUTATIONS="100"
 
 # Processing parameters

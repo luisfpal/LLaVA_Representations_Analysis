@@ -4,6 +4,7 @@ from .argparsing_utils import (
     parse_tokens_mode,
 )
 from .constants import (
+    LLAVA_CHAT_TEMPLATE,
     GUIDE_TEXT,
     ANSWER_TEXT,
     SYSTEM_ROLE,
@@ -64,6 +65,7 @@ __all__ = [
     "parse_layer_index",
     "parse_question_instruction",
     "parse_tokens_mode",
+    "LLAVA_CHAT_TEMPLATE",
     "GUIDE_TEXT",
     "ANSWER_TEXT",
     "SYSTEM_ROLE",

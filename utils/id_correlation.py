@@ -106,11 +106,18 @@ def id_correlation(
 def compute_layers_id_correlation(
     X, Y, N=100, algorithm="twoNN", return_pvalue=True, k=100
 ):
+    # Change datatype to double
+    X = X.to(torch.float64)
+    Y = Y.to(torch.float64)
     num_layers = X.shape[0]
     id_correlation_results = torch.zeros(num_layers, dtype=torch.float64)
+    p_values = []
     for layer in range(num_layers):
         id_correlation_layer = id_correlation(
             X[layer], Y[layer], N, algorithm, return_pvalue, k
         )
         id_correlation_results[layer] = id_correlation_layer["corr"]
+        p_values.append(id_correlation_layer["p"])
+        
+    print(np.array(p_values))
     return id_correlation_results

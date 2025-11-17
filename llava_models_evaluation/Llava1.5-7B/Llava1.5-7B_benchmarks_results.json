@@ -1,0 +1,178 @@
+{
+  "lbasile/llava-0": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1645,
+      "num_incorrect_answers": 855,
+      "accuracy": 0.658
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1270,
+      "num_incorrect_answers": 1230,
+      "accuracy": 0.508
+    },
+    "coco_captioning": {
+      "CIDEr": 0.010211898133006625,
+      "CLIP-S": 0.1461554914712906
+    }
+  },
+  "lbasile/llava-1000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1990,
+      "num_incorrect_answers": 510,
+      "accuracy": 0.796
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1505,
+      "num_incorrect_answers": 995,
+      "accuracy": 0.602
+    },
+    "coco_captioning": {
+      "CIDEr": 0.6740169251827456,
+      "CLIP-S": 0.23748114705085754
+    }
+  },
+  "lbasile/llava-2000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1952,
+      "num_incorrect_answers": 548,
+      "accuracy": 0.7808
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1624,
+      "num_incorrect_answers": 876,
+      "accuracy": 0.6496
+    },
+    "coco_captioning": {
+      "CIDEr": 0.7202869360148517,
+      "CLIP-S": 0.22512699663639069
+    }
+  },
+  "lbasile/llava-3000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1891,
+      "num_incorrect_answers": 609,
+      "accuracy": 0.7564
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1530,
+      "num_incorrect_answers": 970,
+      "accuracy": 0.612
+    },
+    "coco_captioning": {
+      "CIDEr": 0.7857058004806186,
+      "CLIP-S": 0.22225677967071533
+    }
+  },
+  "lbasile/llava-4000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1938,
+      "num_incorrect_answers": 562,
+      "accuracy": 0.7752
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1545,
+      "num_incorrect_answers": 955,
+      "accuracy": 0.618
+    },
+    "coco_captioning": {
+      "CIDEr": 0.7490327195161001,
+      "CLIP-S": 0.21185150742530823
+    }
+  },
+  "lbasile/llava-5000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1986,
+      "num_incorrect_answers": 514,
+      "accuracy": 0.7944
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1625,
+      "num_incorrect_answers": 875,
+      "accuracy": 0.65
+    },
+    "coco_captioning": {
+      "CIDEr": 0.7735488163223754,
+      "CLIP-S": 0.21278274059295654
+    }
+  },
+  "lbasile/llava-6000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1803,
+      "num_incorrect_answers": 697,
+      "accuracy": 0.7212
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1614,
+      "num_incorrect_answers": 886,
+      "accuracy": 0.6456
+    },
+    "coco_captioning": {
+      "CIDEr": 0.8171567219578268,
+      "CLIP-S": 0.2156972587108612
+    }
+  },
+  "lbasile/llava-7000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1989,
+      "num_incorrect_answers": 511,
+      "accuracy": 0.7956
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1611,
+      "num_incorrect_answers": 889,
+      "accuracy": 0.6444
+    },
+    "coco_captioning": {
+      "CIDEr": 0.8550103581912059,
+      "CLIP-S": 0.21384574472904205
+    }
+  },
+  "lbasile/llava-8000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1947,
+      "num_incorrect_answers": 553,
+      "accuracy": 0.7788
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1632,
+      "num_incorrect_answers": 868,
+      "accuracy": 0.6528
+    },
+    "coco_captioning": {
+      "CIDEr": 0.842202593355529,
+      "CLIP-S": 0.21673530340194702
+    }
+  },
+  "lbasile/llava-9000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1948,
+      "num_incorrect_answers": 552,
+      "accuracy": 0.7792
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1627,
+      "num_incorrect_answers": 873,
+      "accuracy": 0.6508
+    },
+    "coco_captioning": {
+      "CIDEr": 0.8343037079297021,
+      "CLIP-S": 0.2130202353000641
+    }
+  },
+  "lbasile/llava-10000": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1974,
+      "num_incorrect_answers": 526,
+      "accuracy": 0.7896
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1633,
+      "num_incorrect_answers": 867,
+      "accuracy": 0.6532
+    },
+    "coco_captioning": {
+      "CIDEr": 0.8385882340198783,
+      "CLIP-S": 0.21359212696552277
+    }
+  }
+}

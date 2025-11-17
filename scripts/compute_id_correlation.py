@@ -166,7 +166,7 @@ def process_models_for_id_correlation(
         N=args.id_correlation_permutations,
         algorithm="twoNN",
         k=args.id_nn_rank,
-        return_pvalue=False,
+        return_pvalue=True,
     )
 
     # Save ID correlation results

@@ -1,0 +1,18 @@
+{
+  "lbasile/llava-0": {
+    "cocoqa_txt": {
+      "num_correct_answers": 1645,
+      "num_incorrect_answers": 855,
+      "accuracy": 0.658
+    },
+    "cocoqa_img": {
+      "num_correct_answers": 1270,
+      "num_incorrect_answers": 1230,
+      "accuracy": 0.508
+    },
+    "coco_captioning": {
+      "CIDEr": 0.010211898133006625,
+      "CLIP-S": 0.1461554914712906
+    }
+  }
+}

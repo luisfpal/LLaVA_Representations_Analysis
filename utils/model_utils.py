@@ -16,7 +16,7 @@ from transformers import (
     # LlamaTokenizerFast
 )
 from huggingface_hub import snapshot_download
-
+from .constants import LLAVA_CHAT_TEMPLATE
 # Define supported vision-language model types and their corresponding classes
 SUPPORTED_VL_MODELS = {
     "llava-1.5": {
@@ -61,9 +61,12 @@ def _get_vl_model_classes(
     Raises:
         ValueError: If the model type is not supported.
     """
+    model_name_lower = model_name_or_path.lower()
     for key, classes in SUPPORTED_VL_MODELS.items():
-        if key in model_name_or_path.lower():
+        if key in model_name_lower:
             return classes["processor"], classes["model"]
+    if "lbasile/llava" in model_name_lower:
+        return LlavaProcessor, LlavaForConditionalGeneration
     raise ValueError(
         f"Model type for '{model_name_or_path}' is not supported. "
         f"Supported types: {', '.join(SUPPORTED_VL_MODELS.keys())}"
@@ -147,10 +150,11 @@ def load_hf_model_and_processor_or_tokenizer(
             )
 
             if "vicuna" in model_name_or_path.lower():
-                chat_template = """
-                {% for message in messages %}{% if message['role'] != 'system' %}{{ message['role'].upper() + ': '}}{% endif %}{# Render all images first #}{% for content in message['content'] | selectattr('type', 'equalto', 'image') %}{{ '<image>\n' }}{% endfor %}{# Render all text next #}{% if message['role'] != 'assistant' %}{% for content in message['content'] | selectattr('type', 'equalto', 'text') %}{{ content['text'] + ' '}}{% endfor %}{% else %}{% for content in message['content'] | selectattr('type', 'equalto', 'text') %}{% generation %}{{ content['text'] + ' '}}{% endgeneration %}{% endfor %}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ 'ASSISTANT:' }}{% endif %}
-                """.strip()
+                chat_template = LLAVA_CHAT_TEMPLATE
                 processor.chat_template = chat_template
+            elif "lbasile/llava" in model_name_or_path.lower():
+                processor.chat_template = LLAVA_CHAT_TEMPLATE
+                
         except Exception as e:
             raise RuntimeError(
                 "Failed to load "
