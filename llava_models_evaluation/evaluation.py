@@ -118,8 +118,8 @@ def main(collection_name):
     print(f"[bold green]Evaluating models from {collection_name} collection[/bold green]")
     
     models_collection_prefix = MODELS_COLLECTION[collection_name]
-    # model_names = [f"{models_collection_prefix}{i}" for i in range(1000, 10001, 1000)]
-    model_names = [f"{models_collection_prefix}0"]
+    model_names = [f"{models_collection_prefix}{i}" for i in range(1000, 10001, 1000)]
+    # model_names = [f"{models_collection_prefix}0"]
 
     # Setup output directory
     output_dir = FILE_PARENT_DIR / collection_name
